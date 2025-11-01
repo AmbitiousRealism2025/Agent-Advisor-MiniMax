@@ -1,7 +1,17 @@
 # Agent Advisor MVP - MiniMax Edition
 
-**Project Status**: Phase 5 Complete — MVP Ready with Comprehensive Testing
-**Purpose**: Build an AI agent that guides developers through creating custom Claude agents using the Claude Agent SDK + MiniMax API
+**Project Status**: ✅ Phase 5 Complete — MVP Functional & Deployed to GitHub
+**Purpose**: AI agent that guides developers through creating custom Claude Agent SDK projects integrated with MiniMax API
+**Repository**: [github.com/AmbitiousRealism2025/Agent-Advisor-MiniMax](https://github.com/AmbitiousRealism2025/Agent-Advisor-MiniMax)
+
+---
+
+## 📋 Quick Links
+
+- **Testing Notes**: See [TESTING_NOTES.md](./TESTING_NOTES.md) for known issues and planned improvements
+- **Getting Started**: See [GETTING_STARTED.md](./GETTING_STARTED.md) for testing and usage guide
+- **Developer Guide**: See [CLAUDE.md](./CLAUDE.md) for agent onboarding and project structure
+- **Project Plan**: See [agent_advisor_mvp-plan.md](./agent_advisor_mvp-plan.md) for complete specification
 
 ---
 

@@ -375,3 +375,53 @@ The advisor follows a comprehensive system prompt that:
 - ✅ Update `README.md` and this guide when new capabilities or workflows are introduced.
 
 Stay aligned with the project roadmap, communicate blockers early, and leave the workspace ready for the next agent to continue seamlessly.
+
+## Git Repository & Version Control
+
+### Repository Information
+- **GitHub Repository**: https://github.com/AmbitiousRealism2025/Agent-Advisor-MiniMax
+- **Branch**: `main`
+- **Initial Commit**: 2025-11-01 (72 files, 17,592 lines)
+- **Remote**: `origin` → https://github.com/AmbitiousRealism2025/Agent-Advisor-MiniMax.git
+
+### Git Workflow
+- Repository is initialized and tracking all project files
+- `.gitignore` is configured to exclude:
+  - `node_modules/`, `dist/`, build artifacts
+  - `.env` and environment files
+  - `test-temp/`, `sessions/`, `output/` directories
+  - IDE files (`.vscode/`, `.DS_Store`, etc.)
+
+### Committing Changes
+Follow the established commit message format:
+```
+Brief description of changes
+
+- Detailed bullet points of what changed
+- Include specific modules/files affected
+- Note any breaking changes or new features
+
+🤖 Generated with Claude Code
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
+### Before Starting New Development Session
+1. Pull latest changes: `git pull origin main`
+2. Check current branch: `git branch`
+3. Review recent commits: `git log --oneline -5`
+4. Check for uncommitted changes: `git status`
+
+## 🔴 IMPORTANT: Session Initialization Checklist
+
+**Every time you start a new development session**, you MUST:
+
+1. **Check Testing Notes**: Read `TESTING_NOTES.md` for documented issues
+2. **Ask the User**: "Would you like to address any items from TESTING_NOTES.md in this session?"
+3. **Review Priority Items**:
+   - 🔴 High Priority: Message truncation issue
+   - 🟡 Medium Priority: Output format & file generation
+   - 🟢 Low Priority: Terminal screen management
+4. **Plan Accordingly**: If user wants to address testing notes, incorporate into session plan
+
+**This is a REQUIRED step at the start of every session.** Do not proceed with new development without checking testing notes and confirming priorities with the user.
