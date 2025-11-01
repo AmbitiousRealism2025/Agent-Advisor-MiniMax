@@ -1,0 +1,40 @@
+{
+  "name": "agent-advisor-mvp",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/advisor-agent.js",
+  "scripts": {
+    "dev": "tsx watch src/advisor-agent.ts",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "vitest run tests/e2e",
+    "test:validation": "vitest run tests/validation",
+    "test:watch": "vitest watch",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui",
+    "start": "node dist/advisor-agent.js",
+    "cli": "tsx src/cli.ts",
+    "cli:interactive": "tsx src/cli.ts --interactive",
+    "advisor": "tsx src/advisor-agent.ts"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.30",
+    "@anthropic-ai/sdk": "^0.68.0",
+    "@modelcontextprotocol/sdk": "^1.20.2",
+    "dotenv": "^16.4.5",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@vitest/coverage-v8": "^1.2.0",
+    "@vitest/ui": "^1.2.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  }
+}
