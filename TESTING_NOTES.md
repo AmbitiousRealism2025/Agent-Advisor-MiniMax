@@ -141,9 +141,178 @@ This document tracks observed issues and planned improvements for the Agent Advi
 
 ---
 
+## 4. Unit Test Failures
+
+**Status**: 🔴 Critical - 38 Test Failures
+
+**Test Run Date**: 2025-11-01 19:36:37
+
+**Summary**:
+- **Test Files**: 5 failed | 4 passed (9 total)
+- **Tests**: 38 failed | 74 passed (112 total)
+- **Passing Modules**: generation (code, prompt, config), persistence
+- **Failing Modules**: classification, interview (state-manager, validator), export (file-writer, packager)
+
+### Root Causes Identified
+
+#### A. Missing QUESTIONS Export (16 failures)
+**Location**: `src/lib/interview/questions.ts`
+**Impact**: All tests importing `QUESTIONS` fail with "Module has no exported member 'QUESTIONS'"
+
+**Affected Tests**:
+- `tests/unit/interview/state-manager.test.ts` - Cannot iterate over questions
+- `tests/unit/interview/validator.test.ts` - Cannot validate against questions
+- `tests/integration/interview-flow.test.ts` - Cannot run interview flow
+
+**Fix**: Export the `QUESTIONS` array from questions.ts:
+```typescript
+// Add to src/lib/interview/questions.ts
+export { QUESTIONS };
+```
+
+#### B. Missing InterviewState Fields (6 failures)
+**Location**: `src/types/interview.ts`
+**Impact**: State manager tests expect `startedAt` and `lastUpdatedAt` timestamps
+
+**Affected Tests**:
+- `should initialize with default state` - expects timestamps
+- `should load persisted state` - expects timestamps after deserialization
+- `should track timestamp updates` - cannot compare timestamps
+
+**Fix Options**:
+1. Add timestamp fields to `InterviewState` interface
+2. Update tests to not expect timestamps (if timestamps were removed)
+
+#### C. Missing State Manager Methods (2 failures)
+**Location**: `src/lib/interview/state-manager.ts`
+**Impact**: Tests expect `getRequirements()` and `getProgress()` helper methods
+
+**Failing Tests**:
+- `should get requirements` - `manager.getRequirements is not a function`
+- `should get progress information` - `manager.getProgress is not a function`
+
+**Fix**: Either add these helper methods or update tests to use `getState().requirements` directly
+
+#### D. Validation Result Type Mismatch (13 failures)
+**Location**: `tests/unit/interview/validator.test.ts`
+**Impact**: Tests expect `result.error` field but validation returns different structure
+
+**Observed Errors**:
+- `expected undefined not to be undefined` when accessing `result.error`
+- `the given combination of arguments (undefined and string) is invalid`
+
+**Cause**: Validation result type changed but tests weren't updated
+
+**Fix**: Update validator tests to match new validation result structure
+
+#### E. Classification Scoring Too Low (5 failures)
+**Location**: `src/lib/classification/classifier.ts`
+**Impact**: Template matching scores much lower than expected
+
+**Failures**:
+- Data Analyst: 49 (expected >70)
+- Content Creator: 23 (expected >70)
+- Code Assistant: 31 (expected >70)
+- Research Agent: 13 (expected >70)
+- Automation Agent: 23 (expected >70)
+
+**Cause**: Scoring algorithm may be too conservative or sample requirements don't match templates well
+
+**Fix Options**:
+1. Adjust scoring weights in classifier
+2. Lower test expectations to realistic scores
+3. Improve sample requirements to better match templates
+
+#### F. Classification Mismatches (3 failures)
+**Location**: `src/lib/classification/classifier.test.ts`
+**Impact**: Wrong templates being selected
+
+**Failures**:
+- Content Creator requirements → matched `research-agent` (should be `content-creator`)
+- Research Agent requirements → matched `data-analyst` (should be `research-agent`)
+- Automation Agent requirements → matched `code-assistant` (should be `automation-agent`)
+
+**Cause**: Low scoring leads to incorrect template selection
+
+#### G. MCP Server Generation Logic (1 failure)
+**Test**: `should return empty array when no special capabilities`
+**Expected**: `[]`
+**Actual**: `[{name: 'data-tools', ...}]`
+
+**Cause**: `dataAnalysis: false` still triggers data-tools MCP server recommendation
+
+#### H. File System Test Race Conditions (3 failures)
+**Location**: `tests/unit/export/file-writer.test.ts`, `tests/unit/export/packager.test.ts`
+
+**Issues**:
+1. `copyFile` - Source file missing after copy (cleanup race condition)
+2. `listFiles` - Only 1 file found instead of 3 (files not fully written)
+3. `readFile` - test-temp directory doesn't exist (cleanup from previous test)
+
+**Cause**: Async file operations completing out of order, temp directory cleanup issues
+
+**Cleanup Errors** (stderr):
+```
+ENOTEMPTY: directory not empty, rmdir '/Users/.../test-temp/...'
+```
+
+Multiple temp directories not cleaning up properly between tests.
+
+### Priority Fix Order
+
+**Phase 1 - Critical (blocks other tests)**:
+1. Export `QUESTIONS` array → fixes 16 failures immediately
+2. Fix temp directory cleanup → prevents cascade failures
+3. Add missing State Manager methods OR update tests
+
+**Phase 2 - Important (affects core functionality)**:
+4. Fix validation result type mismatches → fixes 13 failures
+5. Update InterviewState type for timestamps OR remove timestamp tests
+
+**Phase 3 - Algorithm Tuning**:
+6. Adjust classification scoring algorithm
+7. Fix MCP server generation logic
+8. Improve sample requirements or test expectations
+
+### Recommended Approach for Next Session
+
+```markdown
+1. Quick Wins (30 min):
+   - Export QUESTIONS array
+   - Fix temp directory cleanup with proper await/sequential operations
+
+2. Medium Effort (1-2 hours):
+   - Align validator test expectations with actual validation result structure
+   - Add getRequirements()/getProgress() methods or update tests
+   - Fix timestamp handling in InterviewState
+
+3. Algorithm Review (1-2 hours):
+   - Review classification scoring weights
+   - Test with real-world requirements
+   - Adjust thresholds or improve capability matching
+```
+
+### Test Files Status
+
+✅ **Passing (74 tests)**:
+- `tests/unit/generation/prompt-generator.test.ts` (2/2)
+- `tests/unit/generation/config-generator.test.ts` (2/2)
+- `tests/unit/generation/code-generator.test.ts` (11/11)
+- `tests/unit/interview/persistence.test.ts` (10/10)
+- Partial: classification (20/29), state-manager (5/13), validator (9/25)
+
+❌ **Failing (38 tests)**:
+- `tests/unit/interview/validator.test.ts` (16/25 failed)
+- `tests/unit/interview/state-manager.test.ts` (8/13 failed)
+- `tests/unit/classification/classifier.test.ts` (9/29 failed)
+- `tests/unit/export/file-writer.test.ts` (3/17 failed)
+- `tests/unit/export/packager.test.ts` (2/3 failed)
+
+---
+
 ## General Testing Status
 
-**Last Updated**: 2025-11-01
+**Last Updated**: 2025-11-01 19:36
 
 **Environment**:
 - Node.js version: 18+
