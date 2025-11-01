@@ -380,9 +380,18 @@ Stay aligned with the project roadmap, communicate blockers early, and leave the
 
 ### Repository Information
 - **GitHub Repository**: https://github.com/AmbitiousRealism2025/Agent-Advisor-MiniMax
-- **Branch**: `main`
+- **Working Branch**: `dev` (for all development work)
+- **Stable Branch**: `main` (production-ready releases only)
 - **Initial Commit**: 2025-11-01 (72 files, 17,592 lines)
 - **Remote**: `origin` → https://github.com/AmbitiousRealism2025/Agent-Advisor-MiniMax.git
+
+### Branching Strategy
+
+**IMPORTANT**: All development work happens on `dev` branch.
+
+- **`main` branch**: Production-ready code only. No direct commits.
+- **`dev` branch**: Active development, testing, and improvements. Default working branch.
+- **Feature branches** (optional): For major features, branch off `dev` and merge back with PR.
 
 ### Git Workflow
 - Repository is initialized and tracking all project files
@@ -407,10 +416,19 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
 ### Before Starting New Development Session
-1. Pull latest changes: `git pull origin main`
-2. Check current branch: `git branch`
-3. Review recent commits: `git log --oneline -5`
-4. Check for uncommitted changes: `git status`
+1. **Switch to dev branch**: `git checkout dev`
+2. **Pull latest changes**: `git pull origin dev`
+3. **Check current branch**: `git branch` (should show `* dev`)
+4. **Review recent commits**: `git log --oneline -5`
+5. **Check for uncommitted changes**: `git status`
+
+### Merging to Main
+When `dev` is stable and ready for release:
+1. Ensure all tests pass on `dev`
+2. Create PR from `dev` → `main`
+3. Review changes thoroughly
+4. Merge PR to update `main`
+5. Tag release on `main` if applicable
 
 ## 🔴 IMPORTANT: Session Initialization Checklist
 
