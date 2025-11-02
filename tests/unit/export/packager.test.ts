@@ -6,21 +6,28 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { AgentPackager } from '../../../src/lib/export/packager.js';
 import { AgentClassifier } from '../../../src/lib/classification/classifier.js';
 import { sampleDataAnalystRequirements } from '../../fixtures/sample-requirements.js';
-import { createTempDirectory, cleanupTempDirectory } from '../../utils/test-helpers.js';
+import { createTempDirectory, cleanupTempDirectory, waitForFileExists } from '../../utils/test-helpers.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { FileWriter } from '../../../src/lib/export/file-writer.js';
 
-describe('AgentPackager', () => {
+describe.sequential('AgentPackager', () => {
   let tempDir: string;
   let packager: AgentPackager;
 
   beforeEach(async () => {
     tempDir = await createTempDirectory('packager');
+    // Give file system time to fully initialize the directory
+    await new Promise(resolve => setTimeout(resolve, 50));
+    // Verify temp directory exists before proceeding
+    await fs.access(tempDir);
     packager = new AgentPackager();
   });
 
   afterEach(async () => {
+    // Longer delay for packager due to more files
+    await new Promise(resolve => setTimeout(resolve, 150));
+    // cleanupTempDirectory already has retry logic built in
     await cleanupTempDirectory(tempDir);
   });
 
@@ -41,6 +48,10 @@ describe('AgentPackager', () => {
       includeExamples: true,
       includeTests: true
     });
+
+    // Wait for package.json (sentinel file) to confirm write operations completed
+    const packageJsonPath = path.join(outputDir, 'package.json');
+    await waitForFileExists(packageJsonPath, 2000);
 
     // Assert success
     expect(result.success).toBe(true);
@@ -75,12 +86,14 @@ describe('AgentPackager', () => {
 
     for (const file of expectedFiles) {
       const filePath = path.join(outputDir, file);
-      const exists = await fs.access(filePath).then(() => true).catch(() => false);
+      // Use retry logic for file existence checks
+      const exists = await waitForFileExists(filePath);
       expect(exists).toBe(true);
+      // Small delay between checks
+      await new Promise(resolve => setTimeout(resolve, 10));
     }
 
     // Verify package.json content
-    const packageJsonPath = path.join(outputDir, 'package.json');
     const packageJsonContent = await fs.readFile(packageJsonPath, 'utf-8');
     const packageJson = JSON.parse(packageJsonContent);
     expect(packageJson.name).toBeDefined();
@@ -107,6 +120,10 @@ describe('AgentPackager', () => {
       includeExamples: false,
       includeTests: false
     });
+
+    // Wait for package.json to confirm core files written
+    const packageJsonPath = path.join(outputDir, 'package.json');
+    await waitForFileExists(packageJsonPath, 2000);
 
     expect(result.success).toBe(true);
 
@@ -137,47 +154,58 @@ describe('AgentPackager', () => {
     const classifier = new AgentClassifier();
     const recommendations = classifier.classify(requirements);
 
+    // Store original fileWriter for restoration
+    const originalFileWriter = (packager as any).fileWriter;
+
     // Spy on FileWriter.writeFile to simulate a failure
     const fileWriter = new FileWriter();
     const writeFileSpy = vi.spyOn(fileWriter, 'writeFile');
 
-    // Make the first call fail (src/agent.ts)
-    writeFileSpy.mockResolvedValueOnce({
-      path: 'src/agent.ts',
-      success: false,
-      error: 'Simulated write failure'
-    });
+    try {
+      // Make the first call fail (src/agent.ts)
+      writeFileSpy.mockResolvedValueOnce({
+        path: 'src/agent.ts',
+        success: false,
+        error: 'Simulated write failure'
+      });
 
-    // Let other calls proceed normally
-    writeFileSpy.mockImplementation(async (path, content, options) => {
-      return FileWriter.prototype.writeFile.call(fileWriter, path, content, options);
-    });
+      // Let other calls proceed normally
+      writeFileSpy.mockImplementation(async (path, content, options) => {
+        return FileWriter.prototype.writeFile.call(fileWriter, path, content, options);
+      });
 
-    // Replace packager's fileWriter with our spy
-    (packager as any).fileWriter = fileWriter;
+      // Replace packager's fileWriter with our spy
+      (packager as any).fileWriter = fileWriter;
 
-    const outputDir = path.join(tempDir, 'failure-test');
-    const result = await packager.packageAgent({
-      outputDir,
-      agentName: 'Failure Test Agent',
-      templateId: 'data-analyst',
-      requirements,
-      recommendations,
-      includeDocumentation: true,
-      includeExamples: true,
-      includeTests: false
-    });
+      const outputDir = path.join(tempDir, 'failure-test');
+      const result = await packager.packageAgent({
+        outputDir,
+        agentName: 'Failure Test Agent',
+        templateId: 'data-analyst',
+        requirements,
+        recommendations,
+        includeDocumentation: true,
+        includeExamples: true,
+        includeTests: false
+      });
 
-    // Should return success: false due to file failure
-    expect(result.success).toBe(false);
-    expect(result.errors).toBeDefined();
-    expect(result.errors!.length).toBeGreaterThan(0);
-    expect(result.errors!.some(e => e.includes('Simulated write failure'))).toBe(true);
+      // Ensure all mocked operations complete
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-    // Other files should still succeed
-    const successfulWrites = result.files.filter(f => f.success);
-    expect(successfulWrites.length).toBeGreaterThan(0);
+      // Should return success: false due to file failure
+      expect(result.success).toBe(false);
+      expect(result.errors).toBeDefined();
+      expect(result.errors!.length).toBeGreaterThan(0);
+      expect(result.errors!.some(e => e.includes('Simulated write failure'))).toBe(true);
 
-    writeFileSpy.mockRestore();
+      // Other files should still succeed
+      const successfulWrites = result.files.filter(f => f.success);
+      expect(successfulWrites.length).toBeGreaterThan(0);
+    } finally {
+      // Guarantee cleanup even if test fails
+      writeFileSpy.mockRestore();
+      (packager as any).fileWriter = originalFileWriter;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
   });
 });

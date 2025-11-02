@@ -133,21 +133,55 @@ export function createMockAgentRecommendations(
 export async function createTempDirectory(prefix: string = 'test'): Promise<string> {
   const tempDir = path.join(__dirname, '../../test-temp', `${prefix}-${Date.now()}`);
   await fs.mkdir(tempDir, { recursive: true });
+  // Verify directory is fully created and accessible
+  await fs.access(tempDir);
+  // Small delay to ensure file system is ready
+  await new Promise(resolve => setTimeout(resolve, 50));
   return tempDir;
 }
 
 /**
  * Removes a temporary test directory and all its contents.
+ * Implements retry logic to handle file system delays and race conditions.
  *
  * @param dirPath - Absolute path to the directory to remove
  */
 export async function cleanupTempDirectory(dirPath: string): Promise<void> {
-  try {
-    await fs.rm(dirPath, { recursive: true, force: true });
-  } catch (error) {
-    // Ignore errors if directory doesn't exist
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      console.warn(`Failed to cleanup temp directory ${dirPath}:`, error);
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      // Check if directory exists first
+      await fs.access(dirPath);
+
+      // Wait a bit to ensure all file handles are closed
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Attempt cleanup
+      await fs.rm(dirPath, { recursive: true, force: true });
+
+      // Verify cleanup succeeded
+      try {
+        await fs.access(dirPath);
+        // Directory still exists, retry
+        if (attempt < maxAttempts - 1) continue;
+      } catch {
+        // Directory successfully removed
+        return;
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        // Directory doesn't exist, cleanup successful
+        return;
+      }
+
+      // Other error, retry if attempts remain
+      if (attempt < maxAttempts - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)));
+        continue;
+      }
+
+      // Final attempt failed, log warning
+      console.warn(`Failed to cleanup temp directory ${dirPath} after ${maxAttempts} attempts:`, error);
     }
   }
 }
@@ -364,6 +398,50 @@ export function createMockTimestamp(offsetMs: number = 0): Date {
  */
 export function wait(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Ensures file operations execute sequentially with delays between them.
+ * Useful for tests that create multiple files and need to avoid race conditions.
+ *
+ * @param operations - Array of async operations to execute
+ * @param delayBetween - Delay in milliseconds between operations (default: 50ms)
+ * @returns Promise resolving to array of operation results
+ */
+export async function ensureSequentialFileOps<T>(
+  operations: Array<() => Promise<T>>,
+  delayBetween: number = 50
+): Promise<T[]> {
+  const results: T[] = [];
+  for (const op of operations) {
+    results.push(await op());
+    await new Promise(resolve => setTimeout(resolve, delayBetween));
+  }
+  return results;
+}
+
+/**
+ * Waits for a file to exist with retry logic.
+ * Handles file system lag by polling until the file becomes accessible.
+ *
+ * @param filePath - Path to the file to check
+ * @param timeoutMs - Maximum time to wait in milliseconds (default: 1000ms)
+ * @returns Promise resolving to true if file exists, false if timeout reached
+ */
+export async function waitForFileExists(
+  filePath: string,
+  timeoutMs: number = 1000
+): Promise<boolean> {
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  }
+  return false;
 }
 
 /**

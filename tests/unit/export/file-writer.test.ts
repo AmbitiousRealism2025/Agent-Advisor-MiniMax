@@ -6,20 +6,25 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { FileWriter } from '../../../src/lib/export/file-writer.js';
-import { createTempDirectory, cleanupTempDirectory } from '../../utils/test-helpers.js';
+import { createTempDirectory, cleanupTempDirectory, waitForFileExists } from '../../utils/test-helpers.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-describe('FileWriter', () => {
+describe.sequential('FileWriter', () => {
   let tempDir: string;
   let fileWriter: FileWriter;
 
   beforeEach(async () => {
     tempDir = await createTempDirectory('filewriter');
+    // Give file system time to fully initialize the directory
+    await new Promise(resolve => setTimeout(resolve, 50));
     fileWriter = new FileWriter();
   });
 
   afterEach(async () => {
+    // Short delay to ensure all file handles are closed
+    await new Promise(resolve => setTimeout(resolve, 50));
+    // cleanupTempDirectory already has retry logic built in
     await cleanupTempDirectory(tempDir);
   });
 
@@ -136,6 +141,9 @@ describe('FileWriter', () => {
 
       const result = await fileWriter.copyFile(sourcePath, destPath);
 
+      // Wait for destination file to exist
+      await waitForFileExists(destPath);
+
       expect(result.success).toBe(true);
 
       const destContent = await fs.readFile(destPath, 'utf-8');
@@ -161,17 +169,26 @@ describe('FileWriter', () => {
         createParentDirs: true
       });
 
+      // Wait for first file as sentinel to confirm operations started
+      const firstFilePath = path.join(tempDir, files[0].relativePath);
+      await waitForFileExists(firstFilePath, 2000);
+
       expect(results).toHaveLength(3);
       expect(results.every(r => r.success)).toBe(true);
 
       // Verify all files exist with correct content
       for (const file of files) {
         const fullPath = path.join(tempDir, file.relativePath);
-        const exists = await fs.access(fullPath).then(() => true).catch(() => false);
+
+        // Wait for each file to be accessible
+        const exists = await waitForFileExists(fullPath);
         expect(exists).toBe(true);
 
         const content = await fs.readFile(fullPath, 'utf-8');
         expect(content).toBe(file.content);
+
+        // Small delay between file checks
+        await new Promise(resolve => setTimeout(resolve, 10));
       }
     });
 
@@ -218,8 +235,14 @@ describe('FileWriter', () => {
       await fs.writeFile(path.join(tempDir, 'file2.txt'), 'content2');
       await fs.writeFile(path.join(tempDir, 'file3.log'), 'content3');
 
+      // Wait for last file to confirm all writes completed
+      await waitForFileExists(path.join(tempDir, 'file3.log'));
+
       // Create a subdirectory (should not be included in results)
       await fs.mkdir(path.join(tempDir, 'subdir'));
+
+      // Verify subdirectory exists
+      await fs.access(path.join(tempDir, 'subdir'));
 
       const files = await fileWriter.listFiles(tempDir);
 

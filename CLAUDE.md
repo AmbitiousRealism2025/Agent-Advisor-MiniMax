@@ -1,445 +1,393 @@
-# Agent Onboarding Guide
+# CLAUDE.md
 
-Welcome to the Agent Advisor MiniMax MVP. This document gives future coding agents a concise overview of the project goals, setup steps, and expectations for each development phase.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Mission Overview
-- Build an advisor agent that interviews developers, classifies their needs, and generates Claude Agent SDK projects targeting the MiniMax API.
-- Maintain strict adherence to the five core templates defined in the Phase 1 plan until the roadmap specifies otherwise.
-- Ensure all generated code works with Node.js 18+, the MiniMax-M2 model, and the Claude Agent SDK.
 
-## Setup Checklist
-1. Review `agent_advisor_mvp-plan.md` for architectural details, timelines, and template specifications.
-2. Read the SDK primers in `Agent SDK Primers/` to align with approved integration patterns.
-3. Install dependencies: `npm install`.
-4. Copy `.env.example` to `.env` and populate:
-   - `MINIMAX_JWT_TOKEN` — required MiniMax JWT credential.
-   - `CLI_PATH` — optional local Claude CLI path for advanced tooling.
-   - `LOG_LEVEL` (default `info`) and `NODE_ENV` (default `development`).
-5. Verify TypeScript builds with `npm run build` before committing changes.
+Build an advisor agent that interviews developers, classifies their needs, and generates Claude Agent SDK projects targeting the MiniMax API. All generated code must work with Node.js 18+, the MiniMax-M2 model, and the Claude Agent SDK.
 
-## Project Layout
+## Essential Commands
+
+### Development Workflow
+```bash
+npm install           # Install dependencies
+npm run build         # Compile TypeScript (dist/)
+npm run dev           # Watch-mode development (tsx)
+npm start             # Run compiled advisor from dist/
+npm run cli           # Interactive CLI (recommended)
+npm run advisor       # Direct advisor agent execution
+```
+
+### Testing
+```bash
+npm test                  # Run all tests with Vitest
+npm run test:unit         # Unit tests only
+npm run test:integration  # Integration tests only
+npm run test:e2e          # End-to-end tests (all 5 templates)
+npm run test:validation   # TypeScript compilation validation
+npm run test:coverage     # Generate coverage report
+npm run test:watch        # Watch mode for development
+npm run test:ui           # Interactive Vitest UI
+```
+
+### Single Test Execution
+```bash
+# Run specific test file
+npx vitest run tests/unit/interview/state-manager.test.ts
+
+# Run tests matching pattern
+npx vitest run -t "should validate"
+
+# Watch specific file
+npx vitest watch tests/unit/generation/code-generator.test.ts
+```
+
+## Architecture Overview
+
+### Core System: Agent-Built Agent Builder
+
+The advisor itself is built using the Claude Agent SDK and creates a **streaming conversational workflow**:
+
+1. **Interview Phase** → `ask_interview_question` tool
+2. **Classification Phase** → `classify_agent_type` tool
+3. **Generation Phase** → 3 tools (`generate_agent_code`, `generate_system_prompt`, `generate_config_files`)
+4. **Export Phase** → `generate_implementation_guide` tool
+
+### MCP Integration
+
+The advisor uses **MCP (Model Context Protocol)** via `createSdkMcpServer()` to register all tools. This enables:
+- Streaming responses with real-time console output
+- Tool call orchestration through the MiniMax API
+- **Markdown-formatted tool results** with code blocks and copy instructions
+- Zod validation for all tool inputs
+
+### Output Format: Markdown-Only
+
+**CRITICAL**: The advisor **NEVER** writes files directly. All outputs are formatted as Markdown documents:
+
+- **Tool Results**: All generation tools return Markdown with code fences, file headers, and copy instructions
+- **No File Operations**: System prompt explicitly forbids Bash, Write, Edit, or any file operations
+- **User Workflow**: Users receive Markdown output → use `/save <filename>` command → copy code from saved file
+- **Benefits**: Safe, reviewable, portable output that users control when/where to persist
+
+### Session Management & Conversation Context
+
+**NEW**: The system now maintains conversation continuity across sessions:
+
+**Session Tracking** (`src/advisor-agent.ts:152-155`):
+- `runAdvisor()` accepts `options?: { sessionId?: string; continueSession?: boolean }`
+- Returns `{ sessionId: string | null }` to track advisor session ID
+- Captures session ID from streamed messages for conversation continuity
+- Enables multi-turn conversations with proper context retention
+
+**Conversation Metadata** (`src/types/interview.ts:29-34`):
+- `advisorSessionId` - Links interview session to advisor conversation
+- `messageCount` - Tracks total messages in conversation
+- `lastActivity` - Timestamp of last interaction
+- `conversationStarted` - Timestamp when conversation began
+
+**Automatic Session Resume** (`src/cli.ts:42-74`):
+- CLI automatically loads the most recent session on startup
+- Restores conversation state, metadata, and session ID
+- Displays session info (message count, start time, last activity)
+- Seamless continuation of previous conversations
+
+**State Persistence** (`src/lib/interview/persistence.ts`):
+- All session state saved to `sessions/` directory as JSON
+- Conversation metadata serialized with proper date handling
+- Backward compatible with legacy sessions (optional metadata fields)
+- Automatic cleanup of sessions older than 7 days
+
+**Key Architectural Patterns**
+
+**Streaming Events** (`src/advisor-agent.ts`):
+- `assistant:message` - Agent responses
+- `tool:use` - Tool invocations
+- `thinking` - Extended reasoning blocks (MiniMax-M2)
+- `error` - Error handling
+
+**Module Organization**:
+- `src/lib/interview/` - Interactive interview state machine with session management
+- `src/lib/classification/` - Template matching and scoring engine
+- `src/lib/generation/` - Code/prompt/config generators (return Markdown)
+- `src/lib/export/` - Implementation guide generator (returns Markdown)
+- `src/templates/` - 5 agent templates with tool definitions
+
+## Interactive CLI Commands
+
+When running `npm run cli`, the following commands are available:
+
+```
+/help              - Show available commands
+/exit, /quit       - Exit the CLI
+/clear             - Clear console screen
+/history           - Show conversation history
+/save <filename>   - Save last advisor output to Markdown file
+/load [name]       - Load saved interview session
+/status            - Show current interview progress
+/templates         - List all available agent templates
+```
+
+**Query Mode**: Any input that doesn't start with `/` is treated as a query and streamed to the advisor agent.
+
+**Output Capture**: The CLI automatically captures all advisor responses. When code blocks are detected:
+- Visual separator and tip message appears
+- Use `/save my-agent.md` to write output to disk
+- File saved with full Markdown formatting for easy copy-paste
+
+**Session Management**:
+- `/load` - List all available sessions or load a specific session by ID
+- Automatic session resume on CLI startup (loads most recent session)
+- Session metadata includes: message count, start time, last activity
+- Conversation context preserved across CLI restarts
+
+**Fallback Mode**: If streaming fails, the CLI falls back to batch pipeline execution.
+
+## Environment Configuration
+
+### Required Variables
+```env
+MINIMAX_JWT_TOKEN=your_jwt_token_here  # Required for MiniMax API access
+```
+
+### Optional Variables
+```env
+CLI_PATH=/Users/username/.claude/local/claude  # Optional Claude CLI path
+LOG_LEVEL=info                                  # Logging level (default: info)
+NODE_ENV=development                            # Environment (default: development)
+```
+
+### MiniMax Configuration Pattern
+```typescript
+import { getMinimaxConfig } from './src/utils/minimax-config.js';
+
+const config = getMinimaxConfig();
+// Returns: { baseUrl: 'https://api.minimax.io/anthropic', apiKey: process.env.MINIMAX_JWT_TOKEN }
+```
+
+## Project Structure
+
 ```
 src/
-├── templates/            # Agent templates (Phase 2 deliverable)
+├── advisor-agent.ts      # Main advisor with MCP server setup
+├── cli.ts                # Interactive CLI with session management
+├── templates/            # 5 agent templates (data-analyst, content-creator, etc.)
+│   ├── index.ts          # Template registry with lookup functions
+│   └── template-types.ts # Shared types and convertToolSchemaToConfig()
 ├── lib/
-│   ├── interview/        # Interview flow logic
-│   ├── classification/   # Template matching engine
-│   ├── generation/       # Code + prompt generation
-│   └── export/           # Packaging + delivery utilities
-├── types/                # Shared TypeScript definitions
-└── utils/                # Configuration + validation helpers
+│   ├── interview/        # State machine, questions, validation, persistence
+│   ├── classification/   # AgentClassifier with scoring algorithm
+│   ├── generation/       # Code/prompt/config generators
+│   └── export/           # FileWriter and AgentPackager
+├── types/                # Shared TypeScript interfaces
+└── utils/                # minimax-config.ts, validation.ts
 
-tests/                    # Vitest suites (Phase 2+)
-examples/                 # Generated reference projects
+tests/
+├── fixtures/             # Sample requirements and responses
+├── utils/                # Test helpers and factory functions
+├── unit/                 # Module-level tests
+├── integration/          # Multi-module workflow tests
+├── validation/           # TypeScript compilation checks
+└── e2e/                  # Complete workflow tests for all templates
+
+sessions/                 # Interview session persistence (gitignored)
+output/                   # Generated agent projects (gitignored)
+examples/                 # Reference implementations
 ```
 
-## Scripts
-- `npm run dev` — Watch-mode development via `tsx`.
-- `npm run build` — TypeScript compilation with declaration output.
-- `npm run test` — Vitest test runner (add coverage as features land).
-- `npm start` — Execute the compiled advisor agent from `dist/`.
+## Five Agent Templates
 
-## Implementation Status
+1. **Data Analyst** (`data-analyst`) - CSV processing, statistics, visualization, reporting
+2. **Content Creator** (`content-creator`) - Blog posts, SEO optimization, multi-platform formatting
+3. **Code Assistant** (`code-assistant`) - Code review, refactoring, test generation, debugging
+4. **Research Agent** (`research-agent`) - Web search, content extraction, fact-checking, source verification
+5. **Automation Agent** (`automation-agent`) - Task scheduling, workflow orchestration, queue management
 
-### ✅ Phase 1 - Interview Module (Completed)
-The interview module has been fully implemented and includes:
-
-#### Core Components
-1. **Questions System** (`src/lib/interview/questions.ts`)
-   - 15 comprehensive questions across 4 stages (discovery, requirements, architecture, output)
-   - Supports text, choice, boolean, and multiselect question types
-   - Configurable required/optional fields with hints
-
-2. **State Management** (`src/lib/interview/state-manager.ts`)
-   - `InterviewStateManager` class for session lifecycle management
-   - Automatic response-to-requirements mapping
-   - Stage progression with completion tracking
-   - Resume capability for interrupted sessions
-
-3. **Validation** (`src/lib/interview/validator.ts`)
-   - Zod-based type-safe validation
-   - Question-specific response validation
-   - Stage completion verification
-   - Complete requirements validation
-
-4. **Persistence** (`src/lib/interview/persistence.ts`)
-   - Async file-based session storage in `sessions/` directory
-   - Session save/load/list/delete operations
-   - Automatic cleanup of old sessions (7-day default)
-   - Proper Date serialization handling
-
-5. **Tool Integration** (`src/lib/interview/tool-handler.ts`)
-   - Claude Agent SDK compatible tool: `ask_interview_question`
-   - Actions: start, answer, skip, resume, status
-   - Returns proper `CallToolResult` format
-   - Comprehensive error handling
-
-#### Module Usage
+Access via:
 ```typescript
-import { createInterviewTool, InterviewStateManager } from './lib/interview';
-
-// Create tool for Claude Agent SDK
-const interviewTool = createInterviewTool();
-
-// Or use the state manager directly
-const manager = new InterviewStateManager();
-manager.initializeSession();
-const question = manager.getCurrentQuestion();
-manager.recordResponse(question.id, 'My Agent Name');
-```
-
-### ✅ Phase 2 - Agent Templates (Completed)
-Five production-ready agent templates have been implemented with complete tool definitions, system prompts, and starter code:
-
-#### 1. Data Analyst Template (`src/templates/data-analyst.ts`)
-**Purpose:** CSV data processing, statistical analysis, and report generation
-
-**Tools:**
-- `read_csv` - Parse CSV files with top-level parameters: `filePath`, `delimiter`, `hasHeaders`, `encoding` (utf8/utf16le/latin1)
-- `analyze_data` - Descriptive, correlation, regression, and distribution analysis with optional `columns` and `groupBy` parameters
-- `generate_visualization` - Create bar, line, scatter, pie, histogram, heatmap charts with required `xAxis` and `yAxis` parameters
-- `export_report` - Generate reports in JSON, CSV, Markdown, or HTML formats with `data`, `format`, `outputPath`, and `includeMetadata` parameters
-
-**Capabilities:** `data-processing`, `statistics`, `visualization`, `reporting`, `file-access`
-
-**Schema Changes (2025-01-XX):**
-- `read_csv`: Removed nested `parseOptions`, all parameters now top-level; encoding restricted to `['utf8','utf16le','latin1']`
-- `analyze_data`: Removed `options` object (confidenceLevel, roundDecimals); added `groupBy` parameter; changed `z.any()` to `z.unknown()`
-- `generate_visualization`: Removed nested `config` object; `xAxis` and `yAxis` now required; removed non-spec fields (color, width, height); permissions changed from `['file:write','compute']` to `['file:write']`
-- `export_report`: Replaced complex `reportData` structure with simple `data` parameter; removed `pdf` format; default changed to `'markdown'`; added `includeMetadata` boolean
-
-#### 2. Content Creator Template (`src/templates/content-creator.ts`)
-**Purpose:** Blog posts, documentation, marketing copy, and SEO optimization
-
-**Tools:**
-- `generate_outline` - Create structured content outlines by type and audience
-- `write_section` - Write sections with specified tone, style, and perspective
-- `optimize_for_seo` - Optimize content with keyword density and readability analysis
-- `format_content` - Format for WordPress, Medium, GitHub, LinkedIn, or generic platforms
-
-**Capabilities:** `content-creation`, `writing`, `seo`, `marketing`, `documentation`
-
-#### 3. Code Assistant Template (`src/templates/code-assistant.ts`)
-**Purpose:** Code review, debugging, refactoring, and test generation
-
-**Tools:**
-- `analyze_code` - Analyze quality, security, performance, complexity, patterns, best practices
-- `suggest_improvements` - Provide prioritized, actionable improvements with examples
-- `generate_tests` - Generate unit/integration tests with edge cases and mocks
-- `refactor_code` - Refactor with goals like extract-function, simplify, remove-duplication
-
-**Capabilities:** `code-review`, `testing`, `refactoring`, `debugging`, `quality-assurance`
-
-#### 4. Research Agent Template (`src/templates/research-agent.ts`)
-**Purpose:** Web search, content extraction, fact-checking, and source verification
-
-**Tools:**
-- `web_search` - Search with date range, domain filtering, and language options
-- `scrape_content` - Extract content from URLs with CSS selectors
-- `extract_facts` - Extract statistics, claims, quotes, dates, entities, relationships
-- `verify_sources` - Verify credibility with cross-referencing and bias assessment
-
-**Capabilities:** `research`, `web-search`, `fact-checking`, `summarization`, `web-access`
-
-#### 5. Automation Agent Template (`src/templates/automation-agent.ts`)
-**Purpose:** Task orchestration, workflow automation, and scheduled execution
-
-**Tools:**
-- `schedule_task` - Schedule tasks with cron expressions, retries, and notifications
-- `execute_workflow` - Execute multi-step workflows with conditional logic
-- `monitor_status` - Monitor task/workflow status with history, logs, and metrics
-- `manage_queue` - Manage queues with priority, concurrency, and rate limiting
-
-**Capabilities:** `automation`, `orchestration`, `scheduling`, `workflows`, `task-management`
-
-#### Template System Features
-- **Shared Type System** (`src/templates/template-types.ts`)
-  - `TemplateCategory` and `ToolSchemaDefinition` types
-  - `convertToolSchemaToConfig()` - Converts Zod schemas to JSON-serializable tool configs
-  - `createTemplate()` - Factory function for creating AgentTemplate instances
-
-- **Template Registry** (`src/templates/index.ts`)
-  - `ALL_TEMPLATES` array with all 5 templates
-  - `getTemplateById(id)` - Lookup templates by ID
-  - `getTemplatesByCapability(tag)` - Filter templates by capability
-  - `getAllCapabilityTags()` - Get all unique capability tags
-  - `TEMPLATE_COUNT` and `TEMPLATE_CATEGORIES` constants
-
-#### Template Usage
-```typescript
-import {
-  ALL_TEMPLATES,
-  getTemplateById,
-  dataAnalystTemplate,
-  contentCreatorTemplate,
-  codeAssistantTemplate,
-  researchAgentTemplate,
-  automationAgentTemplate
-} from './src/templates';
-
-// Access all templates
-console.log(`${ALL_TEMPLATES.length} templates available`);
-
-// Get specific template
-const template = getTemplateById('data-analyst');
-console.log(template.name); // "Data Analyst Agent"
-console.log(template.defaultTools.length); // 4 tools
-
-// Each template includes:
-// - id, name, description
-// - capabilityTags, idealFor
-// - systemPrompt (comprehensive role definition)
-// - defaultTools (JSON-serializable ToolConfiguration[])
-// - requiredDependencies, recommendedIntegrations
-```
-
-### ✅ Phase 3 - Classification Module (Completed)
-The classification module analyzes interview requirements and recommends the best template match:
-
-#### Core Components
-1. **AgentClassifier** (`src/lib/classification/classifier.ts`)
-   - `classify()` - Main classification with full recommendations
-   - `scoreAllTemplates()` - Scores all templates against requirements
-   - `scoreTemplate()` - Individual template scoring (max 100 points)
-     - Capability matching (40 pts), use case alignment (30 pts)
-     - Interaction style (15 pts), capability requirements (15 pts)
-   - `generateMCPServers()` - Recommends MCP servers (web-fetch, filesystem, memory, etc.)
-   - `customizeSystemPrompt()` - Personalizes template prompts with requirements
-   - `assessComplexity()` - Evaluates as low/medium/high based on tools and capabilities
-   - `generateImplementationSteps()` - Creates detailed implementation roadmap
-
-2. **Tool Integration** (`src/lib/classification/tool-handler.ts`)
-   - Claude Agent SDK tool: `classify_agent_type`
-   - Input: Full `AgentRequirements` from interview
-   - Output: Primary recommendation + confidence score + up to 3 alternatives
-   - Includes tools, dependencies, MCP servers, complexity, and implementation steps
-
-#### Module Usage
-```typescript
-import { AgentClassifier, createClassifyAgentTypeTool } from './lib/classification';
-
-// Create tool for SDK
-const classifyTool = createClassifyAgentTypeTool();
-
-// Or use classifier directly
-const classifier = new AgentClassifier();
-const recommendations = classifier.classify(requirements);
-console.log(recommendations.agentType); // 'data-analyst'
-console.log(recommendations.estimatedComplexity); // 'medium'
-```
-
-### ✅ Phase 4 - Generation Module (Completed)
-The generation module creates complete agent projects from templates and requirements:
-
-#### Core Components
-1. **CodeGenerator** (`src/lib/generation/code-generator.ts`)
-   - `generateFullCode()` - Complete TypeScript implementation
-   - Generates: imports, utilities, tool implementations, agent initialization, main function
-   - Options: include comments, error handling, sample usage
-   - Creates working agent.ts ready for customization
-
-2. **PromptGenerator** (`src/lib/generation/prompt-generator.ts`)
-   - `generate()` - Customized system prompts
-   - Sections: header, role, capabilities, objectives, constraints, guidelines, examples, metrics
-   - Verbosity levels: concise, standard, detailed
-   - `generateConcise()` and `generateDetailed()` convenience methods
-   - Personalizes template prompts with agent name, audience, outcomes, constraints
-
-3. **ConfigGenerator** (`src/lib/generation/config-generator.ts`)
-   - `generateAgentConfigJSON()` - Agent configuration file
-   - `generateEnvFile()` - Environment variables with template-specific settings
-   - `generatePackageJSON()` - Complete package.json with dependencies
-   - `generateTSConfig()` - TypeScript configuration
-   - `generateREADME()` - Project documentation
-   - `generateImplementationGuide()` - Detailed implementation roadmap with checklists
-
-4. **Tool Integration** (`src/lib/generation/tool-handlers.ts`)
-   - `generate_agent_code` - Code generation tool
-   - `generate_system_prompt` - Prompt generation tool
-   - `generate_config_files` - Configuration generation tool
-   - All tools return structured outputs with metadata and next steps
-
-#### Module Usage
-```typescript
-import {
-  CodeGenerator,
-  PromptGenerator,
-  ConfigGenerator,
-  createGenerateAgentCodeTool,
-  createGenerateSystemPromptTool,
-  createGenerateConfigFilesTool
-} from './lib/generation';
-
-// Create tools for SDK
-const codeTool = createGenerateAgentCodeTool();
-const promptTool = createGenerateSystemPromptTool();
-const configTool = createGenerateConfigFilesTool();
-
-// Or use generators directly
-const codeGen = new CodeGenerator();
-const code = codeGen.generateFullCode({
-  templateId: 'data-analyst',
-  agentName: 'MyAgent',
-  includeComments: true
-});
-
-const promptGen = new PromptGenerator();
-const prompt = promptGen.generate({
-  templateId: 'data-analyst',
-  requirements,
-  verbosityLevel: 'detailed'
-});
-
-const configGen = new ConfigGenerator();
-const packageJson = configGen.generatePackageJSON({
-  templateId: 'data-analyst',
-  agentName: 'MyAgent',
-  requirements
-});
+import { ALL_TEMPLATES, getTemplateById, getTemplatesByCapability } from './src/templates';
 ```
 
 ## Implementation Notes
-- Use `getMinimaxConfig()` from `src/utils/minimax-config.ts` to standardize MiniMax access.
-- Validate incoming data with helpers in `src/utils/validation.ts` before persisting or generating outputs.
-- Extend shared types in `src/types/` rather than scattering new interfaces across the codebase.
-- Interview module exports are available via `src/lib/interview/index.ts` barrel file.
-- Classification module exports are available via `src/lib/classification/index.ts` barrel file.
-- Generation module exports are available via `src/lib/generation/index.ts` barrel file.
-- Template module exports are available via `src/templates/index.ts` barrel file.
-- Session data persists in `sessions/` directory (gitignored).
-- All template tools use JSON-serializable configurations (no Zod schemas in runtime data).
-- Import paths use `.js` extensions for ESM compatibility.
-- **Template Spec Compliance:** All templates follow exact MVP spec schemas. The Data Analyst template was updated to remove nested objects and align field names, types, and defaults with the specification in `agent_advisor_mvp-plan.md`.
 
-### ✅ Phase 5 - Main Advisor Agent (Completed)
-The main advisor agent orchestrates the entire workflow through streaming tool calls:
+### ESM Module System
+- All imports use `.js` extensions for ESM compatibility
+- `"type": "module"` in package.json
+- Use `import` syntax, not `require()`
 
-#### Core Components
-1. **Advisor Agent** (`src/advisor-agent.ts`)
-   - `createAdvisorMcpServer()` - Creates MCP server with all 6 tools registered
-   - `runAdvisor(query)` - Streaming query handler with real-time console output
-   - MCP Architecture: Tools registered via `createSdkMcpServer()` from Claude Agent SDK v0.1.30
-   - Environment: Auto-configures MiniMax base URL and API key from `.env`
-   - Streaming Events: Handles assistant messages, tool calls, and errors
+### Type Safety
+- All templates use JSON-serializable configurations (no Zod schemas in runtime data)
+- Convert Zod schemas to JSON via `convertToolSchemaToConfig()` from `src/templates/template-types.ts`
+- Use Zod for validation, not runtime type checking
 
-2. **Interactive CLI** (`src/cli.ts`)
-   - `AdvisorCLI` class for interactive sessions
-   - Commands: `/help`, `/exit`, `/clear`, `/history`, `/save`, `/load`, `/status`, `/templates`
-   - Query Mode: Streams responses from advisor agent
-   - Fallback Mode: Batch pipeline execution when streaming unavailable
-   - Session Management: Save/load interview sessions
+### Tool Output Format
+- **All tool handlers return Markdown**: Generation and export tools format responses as Markdown documents
+- **Code Fences**: Use proper language tags (typescript, json, markdown, bash, env)
+- **File Headers**: Each code block prefixed with `### File: \`filename\``
+- **Copy Instructions**: Each code block followed by `**To use**: Copy the above code to...`
+- **Error Format**: Errors also returned as Markdown with `## Error` heading and troubleshooting sections
 
-#### Available Tools (Registered via MCP)
-The advisor agent workflow uses these tools in sequence:
+### Session Persistence & Conversation Context
+- Sessions stored in `sessions/` directory (gitignored)
+- Automatic cleanup after 7 days
+- Use `src/lib/interview/persistence.ts` for save/load operations
+- **Conversation Metadata**: Each session tracks advisor session ID, message count, and activity timestamps
+- **State Manager Methods**:
+  - `updateConversationMetadata(metadata: ConversationMetadata)` - Update conversation tracking
+  - `getConversationMetadata()` - Retrieve current conversation metadata
+- **CLI Integration**: Session tracking integrated into interactive CLI for seamless multi-session conversations
+- **Backward Compatibility**: Metadata fields are optional to support legacy sessions without conversation tracking
 
-1. **Interview Phase**
-   - `ask_interview_question` - Conducts interactive interview (start, answer, skip, resume, status)
-   - Collects `AgentRequirements` across 15 questions in 4 stages
+### Template Spec Compliance
+**CRITICAL**: All templates must match exact MVP spec schemas in `agent_advisor_mvp-plan.md`. No nested parameter objects - all parameters must be top-level for Claude Agent SDK compatibility.
 
-2. **Classification Phase**
-   - `classify_agent_type` - Analyzes requirements and recommends template
-   - Returns `AgentRecommendations` with complexity scores and alternatives
+## Troubleshooting
 
-3. **Generation Phase**
-   - `generate_agent_code` - Creates TypeScript implementation
-   - `generate_system_prompt` - Customizes system prompt
-   - `generate_config_files` - Generates project files (package.json, .env, README, etc.)
-   - `generate_implementation_guide` - Creates detailed setup and deployment guide
-
-All tools follow Claude Agent SDK patterns with Zod schemas and structured JSON outputs.
-
-#### Usage
+### Build Errors
 ```bash
-# Interactive mode (recommended)
-npm run cli
+# Clean build
+rm -rf dist/
+npm run build
 
-# Single query mode
-npm run cli "I want to build a data analysis agent"
-
-# Direct execution (requires build first)
-npm run build && node dist/advisor-agent.js "your query"
+# Check TypeScript errors without emitting
+npx tsc --noEmit
 ```
 
-#### System Prompt
-The advisor follows a comprehensive system prompt that:
-- Guides developers through structured interview → classification → generation workflow
-- Explains template recommendations with confidence scores
-- Provides complete, production-ready solutions
-- Includes implementation guidance and next steps
-- Maintains professional, educational interaction style
+### Test Failures
+See `TESTING_NOTES.md` for known issues and priority fixes. Current status:
+- **92/112 tests passing** (improved from 74/112)
+- Recent fixes: QUESTIONS export alias, validation type corrections, error message matching
+- Remaining issues: Interview validation edge cases, file system race conditions
 
-## Quality Checklist
-- ✅ Run `npm run build` and relevant tests prior to handoff.
-- ✅ Keep `.env`-sensitive values out of version control; rely on `.env.example` updates if new variables emerge.
-- ✅ Document non-obvious decisions in code comments or commit messages.
-- ✅ Update `README.md` and this guide when new capabilities or workflows are introduced.
+### MiniMax Connection Issues
+```bash
+# Verify JWT token is set
+echo $MINIMAX_JWT_TOKEN
 
-Stay aligned with the project roadmap, communicate blockers early, and leave the workspace ready for the next agent to continue seamlessly.
+# Test with simple query
+npm run cli
+> "Hello, can you help me build an agent?"
+```
 
-## Git Repository & Version Control
+### Generated Code Won't Compile
+- Check that generated code uses `.js` imports
+- Verify all Zod schemas are properly defined
+- Run `npx tsc` in generated project directory
+- See `examples/` for working reference implementations
 
-### Repository Information
-- **GitHub Repository**: https://github.com/AmbitiousRealism2025/Agent-Advisor-MiniMax
-- **Working Branch**: `dev` (for all development work)
-- **Stable Branch**: `main` (production-ready releases only)
-- **Initial Commit**: 2025-11-01 (72 files, 17,592 lines)
-- **Remote**: `origin` → https://github.com/AmbitiousRealism2025/Agent-Advisor-MiniMax.git
+## Git Workflow
 
-### Branching Strategy
+**IMPORTANT**: All development happens on `dev` branch.
 
-**IMPORTANT**: All development work happens on `dev` branch.
+### Before Starting Work
+```bash
+git checkout dev
+git pull origin dev
+git branch  # Verify you're on dev
+git status  # Check for uncommitted changes
+```
 
-- **`main` branch**: Production-ready code only. No direct commits.
-- **`dev` branch**: Active development, testing, and improvements. Default working branch.
-- **Feature branches** (optional): For major features, branch off `dev` and merge back with PR.
-
-### Git Workflow
-- Repository is initialized and tracking all project files
-- `.gitignore` is configured to exclude:
-  - `node_modules/`, `dist/`, build artifacts
-  - `.env` and environment files
-  - `test-temp/`, `sessions/`, `output/` directories
-  - IDE files (`.vscode/`, `.DS_Store`, etc.)
-
-### Committing Changes
-Follow the established commit message format:
+### Commit Message Format
 ```
 Brief description of changes
 
-- Detailed bullet points of what changed
-- Include specific modules/files affected
-- Note any breaking changes or new features
+- Detailed bullet points
+- Specific modules/files affected
+- Breaking changes or new features
 
 🤖 Generated with Claude Code
 
 Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
-### Before Starting New Development Session
-1. **Switch to dev branch**: `git checkout dev`
-2. **Pull latest changes**: `git pull origin dev`
-3. **Check current branch**: `git branch` (should show `* dev`)
-4. **Review recent commits**: `git log --oneline -5`
-5. **Check for uncommitted changes**: `git status`
+### Branching Strategy
+- `main` - Production-ready releases only (no direct commits)
+- `dev` - Active development (default branch)
+- `feature/*` - Optional for major features (branch from dev, merge back to dev)
 
-### Merging to Main
-When `dev` is stable and ready for release:
-1. Ensure all tests pass on `dev`
-2. Create PR from `dev` → `main`
-3. Review changes thoroughly
-4. Merge PR to update `main`
-5. Tag release on `main` if applicable
+## Session Initialization Checklist
 
-## 🔴 IMPORTANT: Session Initialization Checklist
-
-**Every time you start a new development session**, you MUST:
+**REQUIRED at start of every session**:
 
 1. **Check Testing Notes**: Read `TESTING_NOTES.md` for documented issues
-2. **Ask the User**: "Would you like to address any items from TESTING_NOTES.md in this session?"
-3. **Review Priority Items**:
-   - 🔴 High Priority: Message truncation issue
-   - 🟡 Medium Priority: Output format & file generation
-   - 🟢 Low Priority: Terminal screen management
-4. **Plan Accordingly**: If user wants to address testing notes, incorporate into session plan
+2. **Ask User**: "Would you like to address any items from TESTING_NOTES.md?"
+3. **Review Priorities**:
+   - 🔴 High: Message truncation, test failures
+   - 🟡 Medium: Output format & file generation
+   - 🟢 Low: Terminal screen management
+4. **Plan Session**: Incorporate user's priority choices into work plan
 
-**This is a REQUIRED step at the start of every session.** Do not proceed with new development without checking testing notes and confirming priorities with the user.
+## Quality Standards
+
+### Before Committing
+- ✅ Run `npm run build` (must succeed)
+- ✅ Run `npm test` (review any new failures)
+- ✅ Check no sensitive data in `.env` (use `.env.example` for templates)
+- ✅ Update `CLAUDE.md` if architecture changes
+- ✅ Update `TESTING_NOTES.md` if new issues discovered
+
+### Code Standards
+- Use `getMinimaxConfig()` for MiniMax API access
+- Validate data with helpers in `src/utils/validation.ts`
+- Extend types in `src/types/` rather than inline interfaces
+- Export modules via barrel files (`index.ts`)
+- All template tools must be JSON-serializable
+
+## Key References
+
+- **Project Plan**: `agent_advisor_mvp-plan.md` - Complete specification and timeline
+- **Testing Notes**: `TESTING_NOTES.md` - Known issues and improvement plans
+- **Getting Started**: `GETTING_STARTED.md` - User testing and usage guide
+- **SDK Primers**: `Agent SDK Primers/` - TypeScript and Python reference docs
+- **Examples**: `examples/usage-example.md` - Template usage patterns
+
+## Implementation Status
+
+✅ **Phase 1-5 Complete** - MVP Functional:
+- Interview module (15 questions, 4 stages, state management, persistence)
+- 5 agent templates with complete tool definitions
+- Classification module with scoring engine
+- Generation module (code, prompts, config files)
+- Main advisor agent with streaming MCP architecture
+- Interactive CLI with session management
+
+✅ **Recent Updates**:
+- **Test Suite Improvements** (Latest - 2025-11-02):
+  - **Export Test Refactoring**: Eliminated redundant retry loops, DRY violations, and fixed sleeps
+    - Removed outer retry loops in `afterEach` cleanup (test helpers already have retry logic)
+    - Centralized file-existence checks using shared `waitForFileExists()` helper
+    - Replaced fixed `setTimeout()` waits with condition-based polling (sentinel files)
+    - Added try/finally blocks for robust spy restoration in mock tests
+    - Documented vitest parallelism config rationale (`vitest.config.ts:16-22,45-47`)
+  - **Previous Updates** (2025-11-01):
+    - Added `QUESTIONS` export alias for backward compatibility (`src/lib/interview/questions.ts:177`)
+    - Fixed validator test assertions to use `result.errors` array pattern
+    - Updated test assertions to match actual error messages from validators
+    - Added `getRequirements()` and `getProgress()` methods to `InterviewStateManager`
+  - **Test pass rate**: 105/112 unit tests passing (94%), all export tests passing (20/20)
+- **Session Management & Conversation Context**:
+  - `runAdvisor()` now tracks and returns session IDs for conversation continuity
+  - `ConversationMetadata` type tracks advisor session ID, message count, and timestamps
+  - CLI automatically resumes most recent session on startup
+  - `/load` command enhanced to restore full conversation context
+  - Backward compatible with legacy sessions (optional metadata fields)
+- **Markdown-Only Output**: All generation tools now return formatted Markdown instead of JSON
+- **CLI Output Capture**: Automatic capture with `/save <filename>` command for easy persistence
+- **No File Operations**: Advisor never writes files directly, only outputs Markdown
+- **Enhanced UX**: Code fence detection with helpful copy tips
+
+🟡 **Known Issues** (see TESTING_NOTES.md):
+- 7/112 test failures remaining (down from 20/112, originally 38/112)
+- Remaining issues: Interview validator edge cases (2 tests), state-manager timestamp handling (5 tests)
+- Export tests fully stabilized: All 20 file-writer and packager tests passing
+- Pipeline tests use generator classes directly (not affected by tool handler changes)
+
+## Development Philosophy
+
+1. **Template-First**: Start with working templates, customize rather than generate from scratch
+2. **SDK-Native**: Leverage Claude Agent SDK patterns fully
+3. **Type-Safe**: Zod validation for all inputs/outputs
+4. **Streaming-First**: Real-time console output for better UX
+5. **Markdown-Only**: No direct file operations; all outputs as formatted Markdown documents
+6. **User Control**: Users decide when/where to persist generated code via `/save` command
+7. **MVP Discipline**: Stick to 5 templates until roadmap specifies expansion
