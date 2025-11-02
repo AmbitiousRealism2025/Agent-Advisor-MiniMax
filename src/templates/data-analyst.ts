@@ -94,6 +94,9 @@ import { z } from 'zod';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+// NOTE: Persistence is controlled by the end user. Tool handlers should
+// return data and suggested destinations rather than writing files directly.
+
 // CSV parsing utility (simplified - use a library like csv-parse in production)
 async function parseCSV(
   filePath: string,
@@ -240,10 +243,10 @@ const dataAnalystAgent = new Agent({
 
         return {
           success: true,
-          chartPath: outputPath,
+          suggestedPath: outputPath,
           config: chartConfig,
-          message: \`Generated \${chartType} chart with \${data.length} data points\`,
-          note: 'This is a placeholder. Integrate a charting library for production use.',
+          message: \`Prepared \${chartType} chart configuration for \${data.length} data points\`,
+          note: 'Return this configuration to your runtime and persist with a charting library if needed.',
         };
       },
     },
@@ -284,13 +287,13 @@ const dataAnalystAgent = new Agent({
             content = 'CSV export placeholder - implement based on data structure';
           }
 
-          await fs.writeFile(outputPath, content, 'utf-8');
-
           return {
             success: true,
-            reportPath: outputPath,
             format,
-            message: \`Report exported successfully to \${outputPath}\`,
+            content,
+            suggestedPath: outputPath,
+            message: \`Report content prepared for \${format.toUpperCase()} format\`,
+            note: 'Return this payload to your application code and decide if/where to persist it.',
           };
         } catch (error) {
           return {

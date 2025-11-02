@@ -127,10 +127,45 @@ npm run build
 
 ## Installation
 
-Run the standard Node.js installation command after cloning the repository:
+### Local Development
+
+Clone the repository and install dependencies:
 
 ```bash
+git clone https://github.com/AmbitiousRealism2025/Agent-Advisor-MiniMax.git
+cd agent_advisor-minimax-mvp
 npm install
+npm run build
+```
+
+### Global Installation
+
+Install globally to use the `agent-advisor` command anywhere:
+
+```bash
+npm install -g agent-advisor-mvp
+```
+
+After global installation, you can run:
+```bash
+agent-advisor
+```
+
+### Using npx (No Installation Required)
+
+Run directly without installing:
+
+```bash
+npx agent-advisor-mvp
+```
+
+### Local Package Usage
+
+After installing locally in a project:
+
+```bash
+npm install agent-advisor-mvp
+npx agent-advisor
 ```
 
 ## Project Structure
@@ -163,7 +198,7 @@ Specializes in CSV data processing, statistical analysis, and report generation.
 - `read_csv` - Parse CSV files with configurable options
 - `analyze_data` - Perform descriptive, correlation, and regression analysis
 - `generate_visualization` - Create charts (bar, line, scatter, pie, histogram, heatmap)
-- `export_report` - Generate reports in PDF, HTML, Markdown, or JSON formats
+- `export_report` - Generate reports in JSON, CSV, Markdown, or HTML formats
 
 **Ideal for:** Automated data analysis, business intelligence, data quality assessment
 
@@ -240,8 +275,57 @@ const dataTemplates = getTemplatesByCapability('data-processing');
 - `npm run test` — Execute the Vitest suite.
 - `npm start` — Run the compiled advisor agent from `dist/`.
 - `npm run cli` — Start the interactive CLI.
+- `npm run cli -- --no-clear` — Start CLI without clearing screen (preserves terminal history).
 - `npm run cli:interactive` — Start the interactive CLI (explicit).
 - `npm run advisor` — Run the advisor agent directly.
+
+## Environment Configuration
+
+### Required Variables
+
+```bash
+MINIMAX_JWT_TOKEN=your_jwt_token_here  # Required for MiniMax API access
+```
+
+### Optional Variables
+
+```bash
+# Thinking block truncation length (default: 300, range: 50-1000)
+MAX_MESSAGE_LENGTH=300
+
+# CLI console clearing on startup (default: true, accepts: true/false/1/0/yes/no)
+CLEAR_SCREEN=true
+
+# Logging and environment
+LOG_LEVEL=info                    # Logging level (default: info)
+NODE_ENV=development              # Environment (default: development)
+CLI_PATH=/path/to/claude          # Optional Claude CLI path
+```
+
+### Console Clearing Behavior
+
+The CLI clears the console on startup by default for a clean interactive experience. You can control this behavior:
+
+**Precedence order** (highest to lowest):
+1. `--no-clear` CLI flag — Runtime override
+2. `CLEAR_SCREEN` environment variable — Session preference
+3. Default behavior — Clear screen (true)
+
+**Examples:**
+```bash
+# Preserve terminal history with flag (highest precedence)
+npm run cli -- --no-clear
+
+# Disable via environment variable
+CLEAR_SCREEN=false npm run cli
+
+# Use default behavior (clear screen)
+npm run cli
+```
+
+**Note**: Clearing only occurs in interactive TTY sessions; non-interactive mode is unaffected.
+
+For complete environment variable documentation with examples, see `.env.example`.
 
 ## Usage Examples
 

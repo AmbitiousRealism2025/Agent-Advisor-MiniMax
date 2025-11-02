@@ -237,7 +237,7 @@ class InterviewToolHandler {
       };
     }
 
-    manager.recordResponse(currentQuestion.id, '');
+    manager.skipCurrentQuestion();
 
     const state = manager.getState();
     await saveSession(state);

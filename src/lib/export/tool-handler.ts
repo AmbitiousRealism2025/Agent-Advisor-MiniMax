@@ -2,6 +2,8 @@ import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { AgentRequirements, AgentRecommendations } from '../../types/agent.js';
 import { ConfigGenerator } from '../generation/config-generator.js';
+import { ErrorCodes, createToolError, formatToolErrorAsMarkdown } from '../../types/errors.js';
+import { ALL_TEMPLATES } from '../../templates/index.js';
 
 /**
  * Schema shape for generate_implementation_guide tool
@@ -105,6 +107,49 @@ export function createGenerateImplementationGuideTool() {
           includeReadme,
           includeExamples,
         } = input;
+
+        // Validate template ID
+        const validTemplates = ALL_TEMPLATES.map(t => t.id);
+        if (!validTemplates.includes(templateId)) {
+          const error = createToolError(
+            ErrorCodes.INVALID_TEMPLATE,
+            `Invalid template ID: ${templateId}`,
+            {
+              field: 'templateId',
+              validValues: validTemplates,
+              context: { provided: templateId }
+            }
+          );
+          return {
+            content: [{
+              type: 'text' as const,
+              text: formatToolErrorAsMarkdown(error)
+            }]
+          };
+        }
+
+        // Validate agent name (basic non-empty check)
+        const trimmedName = agentName.trim();
+        if (!trimmedName || trimmedName.length === 0) {
+          const error = createToolError(
+            ErrorCodes.INVALID_AGENT_NAME,
+            'Agent name cannot be empty',
+            {
+              field: 'agentName',
+              context: {
+                provided: agentName,
+                requirement: 'Must be a non-empty string'
+              }
+            }
+          );
+          return {
+            content: [{
+              type: 'text' as const,
+              text: formatToolErrorAsMarkdown(error)
+            }]
+          };
+        }
+
         const configGen = new ConfigGenerator();
 
         // Generate implementation guide
@@ -167,36 +212,23 @@ export function createGenerateImplementationGuideTool() {
           content: [{ type: 'text' as const, text: markdown }],
         };
       } catch (error) {
-        const errorMarkdown = `## Error
-
-Implementation guide generation failed.
-
-### Error Details
-
-\`\`\`
-${error instanceof Error ? error.message : String(error)}
-\`\`\`
-
-### Troubleshooting
-
-- Verify that all required parameters are provided
-- Ensure the templateId is valid
-- Check that requirements and recommendations are complete
-- Verify the agent name is a valid identifier
-
-### Possible Causes
-
-1. **Invalid Template**: The template ID may not exist or be supported
-2. **Incomplete Data**: Requirements or recommendations may be missing required fields
-3. **Configuration Error**: Check the ConfigGenerator is properly initialized
-
-### Need Help?
-
-Try re-running the generation with validated inputs or contact support.
-`;
+        const toolError = createToolError(
+          ErrorCodes.GENERATION_FAILED,
+          'Implementation guide generation failed',
+          {
+            context: {
+              templateId: input.templateId,
+              agentName: input.agentName,
+              errorMessage: error instanceof Error ? error.message : String(error)
+            }
+          }
+        );
 
         return {
-          content: [{ type: 'text' as const, text: errorMarkdown }],
+          content: [{
+            type: 'text' as const,
+            text: formatToolErrorAsMarkdown(toolError)
+          }]
         };
       }
     }

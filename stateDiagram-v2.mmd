@@ -1,0 +1,53 @@
+stateDiagram-v2
+    [*] --> Initialized: CLI starts
+    Initialized --> LoadingSession: Auto-resume
+    LoadingSession --> Ready: Session loaded
+    LoadingSession --> Ready: No session found
+
+    Ready --> Interviewing: User query
+    Interviewing --> CollectingResponse: Question asked
+    CollectingResponse --> BuildingRequirements: Answer recorded
+    BuildingRequirements --> Interviewing: Next question
+    BuildingRequirements --> InterviewComplete: All 15 answered
+
+    InterviewComplete --> Classifying: classify_agent_type
+    Classifying --> ScoringTemplates: Evaluate 5 templates
+    ScoringTemplates --> SelectingTemplate: Choose best match
+    SelectingTemplate --> GeneratingRecommendations: Build recommendations
+
+    GeneratingRecommendations --> Generating: Generation phase
+    Generating --> CodeGeneration: generate_agent_code
+    Generating --> PromptGeneration: generate_system_prompt
+    Generating --> ConfigGeneration: generate_config_files
+
+    CodeGeneration --> Markdown
+    PromptGeneration --> Markdown
+    ConfigGeneration --> Markdown
+
+    Markdown --> Exporting: generate_implementation_guide
+    Exporting --> OutputReady: Markdown complete
+
+    OutputReady --> Saving: /save command
+    Saving --> Ready: File saved
+
+    OutputReady --> Ready: Continue conversation
+    Ready --> [*]: /exit
+
+    note right of BuildingRequirements
+        responses[] → requirements
+        Incremental mapping
+    end note
+
+    note right of ScoringTemplates
+        Score breakdown:
+        - Capability: 40pts
+        - Use case: 30pts
+        - Style: 15pts
+        - Requirements: 15pts
+    end note
+
+    note right of Markdown
+        All outputs are
+        Markdown-formatted
+        (NOT file operations)
+    end note
