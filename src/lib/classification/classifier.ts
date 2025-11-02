@@ -79,12 +79,12 @@ export class AgentClassifier {
     const missingCapabilities: string[] = [];
     const reasons: string[] = [];
 
-    // Score capability matches (40 points max)
+    // Score capability matches (10 points per match)
     const requiredCapabilities = this.extractRequiredCapabilities(requirements);
     requiredCapabilities.forEach(cap => {
       if (template.capabilityTags.includes(cap)) {
         matchedCapabilities.push(cap);
-        score += 8;
+        score += 10;
       } else {
         missingCapabilities.push(cap);
       }
@@ -107,7 +107,7 @@ export class AgentClassifier {
       reasons.push(`Compatible with ${requirements.interactionStyle} interaction style`);
     }
 
-    // Score capability requirements (15 points max)
+    // Score capability requirements (7 points per requirement)
     const capabilityScore = this.scoreCapabilityRequirements(template, requirements.capabilities);
     score += capabilityScore.score;
     if (capabilityScore.reasons.length > 0) {
@@ -153,7 +153,7 @@ export class AgentClassifier {
     }
 
     // Data analysis specific
-    if (template.id === 'data-analyst' || requirements.capabilities.dataAnalysis) {
+    if (requirements.capabilities.dataAnalysis) {
       servers.push({
         name: 'data-tools',
         description: 'Statistical analysis and data processing utilities',
@@ -330,14 +330,17 @@ await agent.run();`;
   private generateNotes(bestMatch: TemplateScore, alternatives: TemplateScore[], requirements: AgentRequirements): string {
     const notes: string[] = [];
 
-    notes.push(`Selected ${bestMatch.templateId} template with ${bestMatch.score.toFixed(0)}% confidence.`);
+    // Clamp confidence display to 0-100 range
+    const confidence = Math.min(100, Math.max(0, bestMatch.score));
+    notes.push(`Selected ${bestMatch.templateId} template with ${confidence.toFixed(0)}% confidence.`);
 
     if (bestMatch.missingCapabilities.length > 0) {
       notes.push(`Note: Template does not natively support: ${bestMatch.missingCapabilities.join(', ')}. These may require custom implementation.`);
     }
 
     if (alternatives.length > 0 && alternatives[0].score > 50) {
-      notes.push(`Alternative options: ${alternatives.map(a => `${a.templateId} (${a.score.toFixed(0)}%)`).join(', ')}`);
+      // Clamp alternative scores as well
+      notes.push(`Alternative options: ${alternatives.map(a => `${a.templateId} (${Math.min(100, Math.max(0, a.score)).toFixed(0)}%)`).join(', ')}`);
     }
 
     if (requirements.additionalNotes) {
@@ -356,16 +359,36 @@ await agent.run();`;
     // Map capabilities to template tags
     if (requirements.capabilities.fileAccess) capabilities.push('file-access');
     if (requirements.capabilities.webAccess) capabilities.push('web-access');
-    if (requirements.capabilities.dataAnalysis) capabilities.push('data-processing', 'statistics');
+    if (requirements.capabilities.dataAnalysis) capabilities.push('data-processing', 'statistics', 'visualization', 'reporting');
     if (requirements.capabilities.codeExecution) capabilities.push('code-review', 'testing');
 
-    // Extract from primary outcome
+    // Extract from primary outcome with expanded patterns
     const outcome = requirements.primaryOutcome.toLowerCase();
-    if (outcome.includes('data') || outcome.includes('analys')) capabilities.push('data-processing');
-    if (outcome.includes('content') || outcome.includes('writ')) capabilities.push('content-creation');
-    if (outcome.includes('code') || outcome.includes('develop')) capabilities.push('code-review');
-    if (outcome.includes('research') || outcome.includes('search')) capabilities.push('research', 'web-search');
-    if (outcome.includes('automat') || outcome.includes('workflow')) capabilities.push('automation');
+
+    // Data analysis patterns
+    if (/report|statistic|visualiz|chart|graph|metric|data|analys/.test(outcome)) {
+      capabilities.push('data-processing', 'statistics', 'visualization', 'reporting');
+    }
+
+    // Content creation patterns
+    if (/blog|article|seo|market|document|content|writ/.test(outcome)) {
+      capabilities.push('content-creation', 'seo', 'formatting');
+    }
+
+    // Code assistance patterns
+    if (/review|test|refactor|debug|quality|code|develop/.test(outcome)) {
+      capabilities.push('code-review', 'testing', 'refactoring');
+    }
+
+    // Research patterns
+    if (/web|scrape|extract|verify|fact|research|search/.test(outcome)) {
+      capabilities.push('research', 'web-search', 'web-scraping', 'fact-checking');
+    }
+
+    // Automation patterns
+    if (/schedule|orchestrat|queue|task|job|automat|workflow/.test(outcome)) {
+      capabilities.push('automation', 'scheduling', 'orchestration');
+    }
 
     return [...new Set(capabilities)]; // Remove duplicates
   }
@@ -391,21 +414,21 @@ await agent.run();`;
     let score = 0;
     const reasons: string[] = [];
 
-    // Check if template supports required capabilities
+    // Check if template supports required capabilities (7 points per match)
     const supportsFileAccess = template.capabilityTags.includes('file-access');
     const supportsWebAccess = template.capabilityTags.includes('web-access');
     const supportsDataAnalysis = template.capabilityTags.includes('data-processing');
 
     if (capabilities.fileAccess && supportsFileAccess) {
-      score += 5;
+      score += 7;
       reasons.push('Supports file access');
     }
     if (capabilities.webAccess && supportsWebAccess) {
-      score += 5;
+      score += 7;
       reasons.push('Supports web access');
     }
     if (capabilities.dataAnalysis && supportsDataAnalysis) {
-      score += 5;
+      score += 7;
       reasons.push('Supports data analysis');
     }
 

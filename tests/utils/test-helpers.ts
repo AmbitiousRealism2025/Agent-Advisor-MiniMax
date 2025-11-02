@@ -49,6 +49,7 @@ export function createMockInterviewState(
         runtime: 'local'
       }
     },
+    recommendations: null,
     isComplete: false
   };
 
@@ -107,7 +108,7 @@ export function createMockAgentRecommendations(
       'dotenv'
     ],
     mcpServers: requirements.capabilities.fileAccess ? [
-      { name: 'filesystem', description: 'File system access', authentication: 'none' as const }
+      { name: 'filesystem', description: 'File system access', url: 'mcp://filesystem', authentication: 'none' as const }
     ] : [],
     systemPrompt: `You are ${requirements.name}, designed to ${requirements.primaryOutcome}.`,
     starterCode: '',
@@ -119,8 +120,7 @@ export function createMockAgentRecommendations(
       'Implement tools',
       'Test agent',
       'Deploy'
-    ],
-    notes: []
+    ]
   };
 }
 

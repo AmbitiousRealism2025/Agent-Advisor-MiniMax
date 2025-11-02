@@ -56,8 +56,8 @@ export const interviewResponseSchema = z.object({
   ])
 });
 
-type ValidationSuccess<T> = { success: true; data: T };
-type ValidationFailure = { success: false; errors: string[] };
+export type ValidationSuccess<T> = { success: true; data: T; errors?: never };
+export type ValidationFailure = { success: false; errors: string[]; data?: never };
 export type ValidationResult<T> = ValidationSuccess<T> | ValidationFailure;
 
 const environmentSchema = z

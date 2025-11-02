@@ -47,7 +47,7 @@ describe('Interview Flow Integration', () => {
     expect(manager.getRequirements().targetAudience).toEqual(['Developers', 'Analysts']);
 
     manager.recordResponse('q8_file_access', true);
-    expect(manager.getRequirements().capabilities.fileAccess).toBe(true);
+    expect(manager.getRequirements().capabilities?.fileAccess).toBe(true);
   });
 
   it('should advance through all 4 stages', () => {
@@ -148,7 +148,7 @@ describe('Interview Flow Integration', () => {
     manager.initializeSession();
 
     manager.recordResponse('q12_tool_integrations', 'GitHub, Slack, PostgreSQL');
-    expect(manager.getRequirements().capabilities.toolIntegrations).toEqual([
+    expect(manager.getRequirements().capabilities?.toolIntegrations).toEqual([
       'GitHub',
       'Slack',
       'PostgreSQL'

@@ -172,3 +172,6 @@ export const INTERVIEW_QUESTIONS: InterviewQuestion[] = [
     hint: 'Share any other context that might help configure the agent'
   }
 ];
+
+// Backward compatibility alias for tests
+export const QUESTIONS = INTERVIEW_QUESTIONS;

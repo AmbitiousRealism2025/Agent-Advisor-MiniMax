@@ -14,8 +14,8 @@ import { AgentRequirements } from '../../src/types/agent.js';
  */
 export const sampleDataAnalystRequirements: AgentRequirements = {
   name: 'Sales Data Analyzer',
-  description: 'Analyzes sales data and generates insights',
-  primaryOutcome: 'Generate weekly sales reports with trend analysis',
+  description: 'Analyzes sales data and generates insights with statistical analysis',
+  primaryOutcome: 'Generate weekly sales reports with statistical analysis and visualizations',
   targetAudience: ['Sales managers', 'Marketing analysts'],
   interactionStyle: 'task-focused',
   deliveryChannels: ['CLI', 'API'],
@@ -39,8 +39,8 @@ export const sampleDataAnalystRequirements: AgentRequirements = {
  */
 export const sampleContentCreatorRequirements: AgentRequirements = {
   name: 'Blog Post Writer',
-  description: 'Creates SEO-optimized blog content',
-  primaryOutcome: 'Write engaging blog posts with proper SEO',
+  description: 'Creates marketing content with SEO optimization',
+  primaryOutcome: 'Write engaging blog posts and articles with SEO optimization for marketing',
   targetAudience: ['Content marketers', 'Bloggers'],
   interactionStyle: 'conversational',
   deliveryChannels: ['Web Application'],
@@ -64,8 +64,8 @@ export const sampleContentCreatorRequirements: AgentRequirements = {
  */
 export const sampleCodeAssistantRequirements: AgentRequirements = {
   name: 'Code Reviewer',
-  description: 'Reviews code for quality and security',
-  primaryOutcome: 'Provide comprehensive code reviews',
+  description: 'Reviews code for quality with testing and refactoring recommendations',
+  primaryOutcome: 'Provide comprehensive code reviews with refactoring suggestions and testing guidance',
   targetAudience: ['Developers', 'Engineering teams'],
   interactionStyle: 'collaborative',
   deliveryChannels: ['IDE Extension', 'CLI'],
@@ -89,8 +89,8 @@ export const sampleCodeAssistantRequirements: AgentRequirements = {
  */
 export const sampleResearchAgentRequirements: AgentRequirements = {
   name: 'Research Assistant',
-  description: 'Conducts web research and fact-checking',
-  primaryOutcome: 'Find and verify information from web sources',
+  description: 'Conducts web research with content extraction and fact verification',
+  primaryOutcome: 'Extract and verify information from web sources with fact-checking',
   targetAudience: ['Researchers', 'Journalists'],
   interactionStyle: 'task-focused',
   deliveryChannels: ['CLI', 'Web Application'],
@@ -114,8 +114,8 @@ export const sampleResearchAgentRequirements: AgentRequirements = {
  */
 export const sampleAutomationAgentRequirements: AgentRequirements = {
   name: 'Workflow Automator',
-  description: 'Automates repetitive tasks and workflows',
-  primaryOutcome: 'Schedule and execute automated workflows',
+  description: 'Automates repetitive tasks with workflow orchestration and job scheduling',
+  primaryOutcome: 'Schedule and orchestrate automated task workflows with queue management',
   targetAudience: ['Operations teams', 'DevOps engineers'],
   interactionStyle: 'task-focused',
   deliveryChannels: ['API', 'CLI'],
