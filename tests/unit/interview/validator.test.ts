@@ -40,7 +40,8 @@ describe('Interview Validator', () => {
       };
       const result = validateResponse(response);
       expect(result.success).toBe(false);
-      expect(result.error).toBeDefined();
+      expect(result.errors).toBeDefined();
+      expect(result.errors!.length).toBeGreaterThan(0);
     });
 
     it('should validate boolean response', () => {
@@ -104,7 +105,7 @@ describe('Interview Validator', () => {
       };
       const result = validateResponseAgainstQuestion(response, question);
       expect(result.success).toBe(false);
-      expect(result.error).toContain('type');
+      expect(result.errors!.some(err => err.includes('expects a text response'))).toBe(true);
     });
 
     it('should validate choice response against options', () => {
@@ -127,7 +128,7 @@ describe('Interview Validator', () => {
       };
       const result = validateResponseAgainstQuestion(response, question);
       expect(result.success).toBe(false);
-      expect(result.error).toContain('valid options');
+      expect(result.errors!.some(err => err.includes('Valid options'))).toBe(true);
     });
 
     it('should validate multiselect against options', () => {
@@ -150,7 +151,7 @@ describe('Interview Validator', () => {
       };
       const result = validateResponseAgainstQuestion(response, question);
       expect(result.success).toBe(false);
-      expect(result.error).toContain('invalid');
+      expect(result.errors!.some(err => err.includes('invalid'))).toBe(true);
     });
 
     it('should enforce required field validation', () => {
@@ -194,7 +195,7 @@ describe('Interview Validator', () => {
       ];
       const result = validateStageCompletion('discovery', incompleteResponses);
       expect(result.success).toBe(false);
-      expect(result.error).toContain('missing');
+      expect(result.errors!.some(err => err.includes('has no response') || err.includes('Required question'))).toBe(true);
     });
 
     it('should allow missing optional questions', () => {
@@ -229,7 +230,7 @@ describe('Interview Validator', () => {
       };
       const result = validateCompleteRequirements(incompleteRequirements);
       expect(result.success).toBe(false);
-      expect(result.error).toContain('name');
+      expect(result.errors!.some(err => err.includes('name'))).toBe(true);
     });
 
     it('should validate capabilities structure', () => {
@@ -251,7 +252,7 @@ describe('Interview Validator', () => {
       };
       const result = validateCompleteRequirements(invalidRequirements);
       expect(result.success).toBe(false);
-      expect(result.error).toContain('interactionStyle');
+      expect(result.errors!.some(err => err.includes('interactionStyle'))).toBe(true);
     });
   });
 
@@ -274,7 +275,7 @@ describe('Interview Validator', () => {
       ];
       const result = validateAllResponses(unknownResponse);
       expect(result.success).toBe(false);
-      expect(result.error).toContain('question');
+      expect(result.errors!.some(err => err.includes('question'))).toBe(true);
     });
   });
 });

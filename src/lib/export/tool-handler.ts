@@ -96,72 +96,109 @@ export function createGenerateImplementationGuideTool() {
     'Generates comprehensive implementation guide and README for the agent project. Includes step-by-step instructions, troubleshooting tips, and usage examples.',
     generateImplementationGuideSchemaShape,
     async (input: GenerateImplementationGuideInput) => {
-      const {
-        templateId,
-        agentName,
-        requirements,
-        recommendations,
-        includeReadme,
-        includeExamples,
-      } = input;
-      const configGen = new ConfigGenerator();
+      try {
+        const {
+          templateId,
+          agentName,
+          requirements,
+          recommendations,
+          includeReadme,
+          includeExamples,
+        } = input;
+        const configGen = new ConfigGenerator();
 
-      // Generate implementation guide
-      const implementationGuide = configGen.generateImplementationGuide({
-        templateId,
-        agentName,
-        requirements,
-        recommendations: recommendations as AgentRecommendations,
-      });
-
-      // Generate README if requested
-      let readme: string | undefined;
-      if (includeReadme) {
-        readme = configGen.generateREADME({
+        // Generate implementation guide
+        const implementationGuide = configGen.generateImplementationGuide({
           templateId,
           agentName,
           requirements,
           recommendations: recommendations as AgentRecommendations,
         });
+
+        // Generate README if requested
+        let readme: string | undefined;
+        if (includeReadme) {
+          readme = configGen.generateREADME({
+            templateId,
+            agentName,
+            requirements,
+            recommendations: recommendations as AgentRecommendations,
+          });
+        }
+
+        // Build comprehensive Markdown document
+        let markdown = `## Implementation Guide\n\n`;
+
+        // Add implementation guide
+        markdown += `### File: \`IMPLEMENTATION.md\`\n\n`;
+        markdown += `\`\`\`markdown\n${implementationGuide}\n\`\`\`\n\n`;
+        markdown += `**To use**: Copy the above content to \`IMPLEMENTATION.md\` in your project root.\n\n`;
+
+        // Add README if requested
+        if (readme) {
+          markdown += `### File: \`README.md\`\n\n`;
+          markdown += `\`\`\`markdown\n${readme}\n\`\`\`\n\n`;
+          markdown += `**To use**: Copy the above content to \`README.md\` in your project root.\n\n`;
+        }
+
+        // Add files generated summary
+        markdown += `## Files Generated\n\n`;
+        markdown += `1. \`IMPLEMENTATION.md\` - Detailed implementation guide with step-by-step instructions\n`;
+        if (readme) {
+          markdown += `2. \`README.md\` - Project README with overview and quick start\n`;
+        }
+
+        // Add metadata
+        markdown += `\n## Generation Metadata\n\n`;
+        markdown += `- **Template**: ${templateId}\n`;
+        markdown += `- **Agent Name**: ${agentName}\n`;
+        markdown += `- **Generated At**: ${new Date().toISOString()}\n`;
+        markdown += `- **Files Created**: ${readme ? 2 : 1}\n`;
+
+        // Add next steps
+        markdown += `\n## Next Steps\n\n`;
+        markdown += `1. Review the IMPLEMENTATION.md for detailed setup instructions\n`;
+        markdown += `2. Follow the step-by-step checklist to implement your agent\n`;
+        markdown += `3. Refer to the troubleshooting section if you encounter issues\n`;
+        markdown += `4. Customize the agent based on your specific requirements\n`;
+        markdown += `5. Test the agent thoroughly before deploying\n`;
+
+        return {
+          content: [{ type: 'text' as const, text: markdown }],
+        };
+      } catch (error) {
+        const errorMarkdown = `## Error
+
+Implementation guide generation failed.
+
+### Error Details
+
+\`\`\`
+${error instanceof Error ? error.message : String(error)}
+\`\`\`
+
+### Troubleshooting
+
+- Verify that all required parameters are provided
+- Ensure the templateId is valid
+- Check that requirements and recommendations are complete
+- Verify the agent name is a valid identifier
+
+### Possible Causes
+
+1. **Invalid Template**: The template ID may not exist or be supported
+2. **Incomplete Data**: Requirements or recommendations may be missing required fields
+3. **Configuration Error**: Check the ConfigGenerator is properly initialized
+
+### Need Help?
+
+Try re-running the generation with validated inputs or contact support.
+`;
+
+        return {
+          content: [{ type: 'text' as const, text: errorMarkdown }],
+        };
       }
-
-      const result = {
-        success: true,
-        implementationGuide,
-        readme,
-        files: [
-          {
-            name: 'IMPLEMENTATION.md',
-            content: implementationGuide,
-            description: 'Detailed implementation guide with step-by-step instructions',
-          },
-          ...(readme
-            ? [
-                {
-                  name: 'README.md',
-                  content: readme,
-                  description: 'Project README with overview and quick start',
-                },
-              ]
-            : []),
-        ],
-        metadata: {
-          templateId,
-          agentName,
-          generatedAt: new Date().toISOString(),
-          fileCount: readme ? 2 : 1,
-        },
-        nextSteps: [
-          'Review the IMPLEMENTATION.md for detailed setup instructions',
-          'Follow the step-by-step checklist to implement your agent',
-          'Refer to the troubleshooting section if you encounter issues',
-          'Customize the agent based on your specific requirements',
-        ],
-      };
-
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-      };
     }
   );
 }

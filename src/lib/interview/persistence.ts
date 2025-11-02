@@ -63,7 +63,8 @@ export async function saveSession(state: InterviewState): Promise<void> {
     sessionId: state.sessionId,
     timestamp: new Date(),
     interviewState: state,
-    partialRequirements: state.requirements
+    partialRequirements: state.requirements,
+    conversationMetadata: state.conversationMetadata
   };
 
   const serialized = JSON.stringify(
@@ -75,8 +76,22 @@ export async function saveSession(state: InterviewState): Promise<void> {
         responses: persistedState.interviewState.responses.map(r => ({
           ...r,
           timestamp: r.timestamp.toISOString()
-        }))
-      }
+        })),
+        conversationMetadata: persistedState.interviewState.conversationMetadata
+          ? {
+              ...persistedState.interviewState.conversationMetadata,
+              lastActivity: persistedState.interviewState.conversationMetadata.lastActivity.toISOString(),
+              conversationStarted: persistedState.interviewState.conversationMetadata.conversationStarted.toISOString()
+            }
+          : undefined
+      },
+      conversationMetadata: persistedState.conversationMetadata
+        ? {
+            ...persistedState.conversationMetadata,
+            lastActivity: persistedState.conversationMetadata.lastActivity.toISOString(),
+            conversationStarted: persistedState.conversationMetadata.conversationStarted.toISOString()
+          }
+        : undefined
     },
     null,
     2
@@ -100,9 +115,23 @@ export async function loadSession(sessionId: string): Promise<InterviewState | n
         responses: parsed.interviewState.responses.map((r: any) => ({
           ...r,
           timestamp: new Date(r.timestamp)
-        }))
+        })),
+        conversationMetadata: parsed.interviewState.conversationMetadata
+          ? {
+              ...parsed.interviewState.conversationMetadata,
+              lastActivity: new Date(parsed.interviewState.conversationMetadata.lastActivity),
+              conversationStarted: new Date(parsed.interviewState.conversationMetadata.conversationStarted)
+            }
+          : undefined
       },
-      partialRequirements: parsed.partialRequirements
+      partialRequirements: parsed.partialRequirements,
+      conversationMetadata: parsed.conversationMetadata
+        ? {
+            ...parsed.conversationMetadata,
+            lastActivity: new Date(parsed.conversationMetadata.lastActivity),
+            conversationStarted: new Date(parsed.conversationMetadata.conversationStarted)
+          }
+        : undefined
     };
 
     return persistedState.interviewState;

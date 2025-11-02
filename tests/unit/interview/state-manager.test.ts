@@ -98,7 +98,7 @@ describe('InterviewStateManager', () => {
     expect(manager.getState().requirements.primaryOutcome).toBe('Test outcome');
 
     manager.recordResponse('q8_file_access', true);
-    expect(manager.getState().requirements.capabilities.fileAccess).toBe(true);
+    expect(manager.getState().requirements.capabilities?.fileAccess).toBe(true);
   });
 
   it('should handle multiselect responses', () => {
@@ -115,7 +115,7 @@ describe('InterviewStateManager', () => {
     manager.initializeSession();
 
     manager.recordResponse('q12_tool_integrations', 'GitHub, Slack, PostgreSQL');
-    expect(manager.getState().requirements.capabilities.toolIntegrations).toEqual([
+    expect(manager.getState().requirements.capabilities?.toolIntegrations).toEqual([
       'GitHub',
       'Slack',
       'PostgreSQL'
@@ -167,7 +167,9 @@ describe('InterviewStateManager', () => {
     manager.recordResponse('q1_agent_name', 'Test');
     const updatedTimestamp = manager.getState().lastUpdatedAt;
 
-    expect(updatedTimestamp.getTime()).toBeGreaterThan(initialTimestamp.getTime());
+    expect(updatedTimestamp).toBeDefined();
+    expect(initialTimestamp).toBeDefined();
+    expect(updatedTimestamp!.getTime()).toBeGreaterThan(initialTimestamp!.getTime());
   });
 
   it('should get requirements', () => {
