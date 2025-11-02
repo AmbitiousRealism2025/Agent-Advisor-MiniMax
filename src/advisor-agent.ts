@@ -34,7 +34,7 @@ You guide developers through a structured workflow to build custom AI agents:
 - **Be Thorough**: Ask all 15 interview questions across 4 stages (discovery, requirements, architecture, output)
 - **Validate Requirements**: Ensure you have complete information before classification
 - **Explain Recommendations**: When presenting template recommendations, clearly explain why each template was chosen and the confidence scores
-- **Provide Complete Solutions**: Generate all necessary files for a working agent project
+- **Provide Complete Solutions**: Generate comprehensive Markdown documents with all necessary code and configuration
 - **Include Implementation Guidance**: Always provide clear next steps and implementation instructions
 
 ## Available Templates
@@ -45,6 +45,69 @@ You guide developers through a structured workflow to build custom AI agents:
 4. **Research Agent**: Web search, content extraction, fact-checking, source verification
 5. **Automation Agent**: Task orchestration, workflow automation, scheduled execution
 
+## Output Format Requirements
+
+**CRITICAL**: You must NEVER perform file operations. You ONLY output comprehensive Markdown documents.
+
+### Structure Every Generated Output As:
+
+1. **Section Headers**: Use clear ## and ### headers to organize content
+2. **Code Blocks**: Wrap ALL code in proper fenced code blocks with language tags:
+   - \`\`\`typescript for TypeScript code
+   - \`\`\`json for JSON configuration files
+   - \`\`\`markdown for .md files
+   - \`\`\`bash for shell commands
+   - \`\`\`env for environment files
+
+3. **File Headers**: Before each code block, include a header with the filename:
+   \`\`\`markdown
+   ### File: \`src/agent.ts\`
+   \`\`\`typescript
+   // code here
+   \`\`\`
+   \`\`\`
+
+4. **Copy Instructions**: After each code block, add:
+   \`\`\`markdown
+   **To use**: Copy the above code to \`path/to/file\`
+   \`\`\`
+
+5. **Summary Section**: Always end with a "## Files Generated" list showing all file paths
+
+### Example Output Structure:
+
+\`\`\`markdown
+## Agent Implementation
+
+### File: \`src/agent.ts\`
+\`\`\`typescript
+// Complete TypeScript implementation
+\`\`\`
+
+**To use**: Copy the above code to \`src/agent.ts\`
+
+### File: \`package.json\`
+\`\`\`json
+{
+  "name": "my-agent"
+}
+\`\`\`
+
+**To use**: Copy the above code to \`package.json\`
+
+## Files Generated
+
+1. \`src/agent.ts\` - Main agent implementation
+2. \`package.json\` - Project configuration
+3. \`.env.example\` - Environment template
+
+## Next Steps
+
+1. Create project directory
+2. Copy each file to its location
+3. Run \`npm install\`
+\`\`\`
+
 ## Best Practices
 
 - Ask clarifying questions when requirements are unclear
@@ -53,6 +116,7 @@ You guide developers through a structured workflow to build custom AI agents:
 - Include error handling, type safety, and comprehensive comments
 - Provide realistic complexity assessments and implementation timelines
 - Suggest relevant MCP servers to enhance agent capabilities
+- **Output only Markdown** - never use Bash, Write, Edit, or any file operation tools
 
 ## Interaction Style
 
@@ -61,8 +125,9 @@ You guide developers through a structured workflow to build custom AI agents:
 - Proactive in identifying potential issues
 - Educational when explaining technical concepts
 - Patient with developers of all skill levels
+- **Markdown-first**: All code, configuration, and documentation in well-formatted Markdown
 
-Remember: Your goal is to transform vague ideas into production-ready agent projects through systematic discovery, intelligent classification, and comprehensive code generation.`;
+Remember: Your goal is to transform vague ideas into production-ready agent projects through systematic discovery, intelligent classification, and comprehensive Markdown documentation that developers can easily copy and use. NEVER perform file operations—output only Markdown.`;
 
 /**
  * Create and configure the advisor agent MCP server
@@ -84,7 +149,10 @@ export function createAdvisorMcpServer() {
 /**
  * Run the advisor agent with a user query
  */
-export async function runAdvisor(userQuery: string): Promise<void> {
+export async function runAdvisor(
+  userQuery: string,
+  options?: { sessionId?: string; continueSession?: boolean }
+): Promise<{ sessionId: string | null }> {
   const config = getMinimaxConfig();
 
   // Set environment variables for SDK
@@ -97,19 +165,38 @@ export async function runAdvisor(userQuery: string): Promise<void> {
   console.log('\n🤖 Agent Advisor Starting...\n');
   console.log(`Query: ${userQuery}\n`);
 
+  let capturedSessionId: string | null = options?.sessionId || null;
+
   try {
+    const queryOptions: any = {
+      systemPrompt: ADVISOR_SYSTEM_PROMPT,
+      model: config.model,
+      mcpServers: {
+        'advisor-tools': mcpServer,
+      },
+    };
+
+    // Add session continuation options
+    if (options?.sessionId) {
+      queryOptions.resume = options.sessionId;
+    } else if (options?.continueSession) {
+      queryOptions.continue = true;
+    }
+
     const session = query({
       prompt: userQuery,
-      options: {
-        systemPrompt: ADVISOR_SYSTEM_PROMPT,
-        model: config.model,
-        mcpServers: {
-          'advisor-tools': mcpServer,
-        },
-      },
+      options: queryOptions,
     });
 
     for await (const message of session) {
+      // Capture session ID from message metadata
+      if ((message as any).session_id) {
+        capturedSessionId = (message as any).session_id;
+      }
+      if (message.type === 'assistant' && (message as any).message?.session_id) {
+        capturedSessionId = (message as any).message.session_id;
+      }
+
       // Handle streaming events (thinking blocks, deltas)
       if (message.type === 'stream_event' && message.event) {
         const event = message.event;
@@ -124,9 +211,7 @@ export async function runAdvisor(userQuery: string): Promise<void> {
               ? thinkingText.substring(0, 77) + '...'
               : thinkingText;
             console.log(`\n[Thinking] ${truncated}`);
-          } else if (block.type === 'mcp_tool_result' || block.type === 'code_execution_tool_result' ||
-                     block.type === 'bash_code_execution_tool_result' || block.type === 'web_search_tool_result' ||
-                     block.type === 'web_fetch_tool_result') {
+          } else if (block.type === 'mcp_tool_result') {
             // Tool result started - log brief status
             const hasError = (block as any).is_error || (block as any).error;
             const status = hasError ? '❌ error' : '✓ success';
@@ -182,9 +267,10 @@ export async function runAdvisor(userQuery: string): Promise<void> {
     }
 
     console.log('\n\n✨ Agent Advisor Complete\n');
+    return { sessionId: capturedSessionId };
   } catch (error) {
     console.error('\n❌ Fatal Error:', error);
-    throw error;
+    return { sessionId: capturedSessionId };
   }
 }
 
@@ -194,8 +280,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.argv[2] ||
     'I want to build an agent that helps me analyze data from CSV files.';
 
-  runAdvisor(userQuery).catch((error) => {
-    console.error('Failed to run advisor:', error);
-    process.exit(1);
-  });
+  runAdvisor(userQuery)
+    .then((result) => {
+      if (result.sessionId) {
+        console.log(`\nSession ID: ${result.sessionId}`);
+      }
+    })
+    .catch((error) => {
+      console.error('Failed to run advisor:', error);
+      process.exit(1);
+    });
 }

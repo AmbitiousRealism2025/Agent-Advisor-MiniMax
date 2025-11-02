@@ -137,43 +137,71 @@ class GenerateAgentCodeHandler {
         includeSampleUsage: input.includeSampleUsage
       });
 
-      const result = {
-        status: 'success',
-        code,
-        metadata: {
-          templateId: input.templateId,
-          agentName: input.agentName,
-          linesOfCode: code.split('\n').length,
-          features: {
-            comments: input.includeComments,
-            errorHandling: input.includeErrorHandling,
-            sampleUsage: input.includeSampleUsage
-          }
-        },
-        nextSteps: [
-          'Save the code to src/index.ts in your project',
-          'Review and customize tool implementations',
-          'Update the system prompt as needed',
-          'Run npm install to install dependencies',
-          'Run npm run build to compile TypeScript'
-        ]
-      };
+      const linesOfCode = code.split('\n').length;
+
+      // Build Markdown document
+      const markdown = `## Agent Code Generated
+
+### File: \`src/index.ts\`
+
+\`\`\`typescript
+${code}
+\`\`\`
+
+**To use**: Copy the above code to \`src/index.ts\` in your project directory.
+
+## Code Metadata
+
+- **Template**: ${input.templateId}
+- **Agent Name**: ${input.agentName}
+- **Lines of Code**: ${linesOfCode}
+- **Features Included**:
+  - Comments: ${input.includeComments ? 'Yes' : 'No'}
+  - Error Handling: ${input.includeErrorHandling ? 'Yes' : 'No'}
+  - Sample Usage: ${input.includeSampleUsage ? 'Yes' : 'No'}
+
+## Next Steps
+
+1. Create your project directory
+2. Copy the code above to \`src/index.ts\`
+3. Review and customize tool implementations
+4. Update the system prompt as needed
+5. Run \`npm install\` to install dependencies
+6. Run \`npm run build\` to compile TypeScript
+`;
 
       return {
         content: [{
           type: 'text',
-          text: JSON.stringify(result, null, 2)
+          text: markdown
         }]
       };
     } catch (error) {
+      const errorMarkdown = `## Error
+
+Code generation failed.
+
+### Error Details
+
+\`\`\`
+${error instanceof Error ? error.message : String(error)}
+\`\`\`
+
+### Troubleshooting
+
+- Verify that the \`templateId\` is valid (data-analyst, content-creator, code-assistant, research-agent, or automation-agent)
+- Ensure the \`agentName\` is a valid identifier
+- Check that all required parameters are provided
+
+### Need Help?
+
+Try re-running the generation with a different template or contact support.
+`;
+
       return {
         content: [{
           type: 'text',
-          text: JSON.stringify({
-            status: 'error',
-            error: 'Code generation failed',
-            details: error instanceof Error ? error.message : String(error)
-          }, null, 2)
+          text: errorMarkdown
         }]
       };
     }
@@ -195,17 +223,34 @@ class GenerateSystemPromptHandler {
       // Validate requirements
       const validationResult = agentRequirementsSchema.safeParse(input.requirements);
       if (!validationResult.success) {
+        const errors = validationResult.error.errors.map(err =>
+          `- **${err.path.join('.')}**: ${err.message}`
+        ).join('\n');
+
+        const errorMarkdown = `## Error
+
+Invalid requirements provided.
+
+### Validation Errors
+
+${errors}
+
+### Troubleshooting
+
+- Review the requirements object structure
+- Ensure all required fields are present
+- Check that enum values match allowed options
+- Verify data types match the schema
+
+### Need Help?
+
+Consult the requirements schema documentation or provide complete interview responses.
+`;
+
         return {
           content: [{
             type: 'text',
-            text: JSON.stringify({
-              status: 'error',
-              error: 'Invalid requirements',
-              details: validationResult.error.errors.map(err => ({
-                path: err.path.join('.'),
-                message: err.message
-              }))
-            }, null, 2)
+            text: errorMarkdown
           }]
         };
       }
@@ -218,39 +263,71 @@ class GenerateSystemPromptHandler {
         verbosityLevel: input.verbosityLevel
       });
 
-      const result = {
-        status: 'success',
-        prompt,
-        metadata: {
-          templateId: input.templateId,
-          agentName: input.requirements.name,
-          wordCount: prompt.split(/\s+/).length,
-          sections: prompt.split('\n## ').length - 1,
-          verbosity: input.verbosityLevel
-        },
-        nextSteps: [
-          'Review the generated system prompt',
-          'Customize specific sections as needed',
-          'Test the prompt with sample interactions',
-          'Update agent configuration with the prompt'
-        ]
-      };
+      const wordCount = prompt.split(/\s+/).length;
+      const sections = prompt.split('\n## ').length - 1;
+
+      // Build Markdown document
+      const markdown = `## System Prompt Generated
+
+### File: \`system-prompt.md\`
+
+\`\`\`markdown
+${prompt}
+\`\`\`
+
+**To use**: Copy the above prompt to your agent's system prompt configuration.
+
+## Prompt Metadata
+
+- **Template**: ${input.templateId}
+- **Agent Name**: ${input.requirements.name}
+- **Word Count**: ${wordCount}
+- **Sections**: ${sections}
+- **Verbosity Level**: ${input.verbosityLevel || 'standard'}
+- **Includes Examples**: ${input.includeExamples ? 'Yes' : 'No'}
+- **Includes Constraints**: ${input.includeConstraints ? 'Yes' : 'No'}
+
+## Next Steps
+
+1. Review the generated system prompt carefully
+2. Customize specific sections to match your exact needs
+3. Test the prompt with sample user interactions
+4. Update your agent configuration file with the prompt
+5. Iterate based on agent performance
+`;
 
       return {
         content: [{
           type: 'text',
-          text: JSON.stringify(result, null, 2)
+          text: markdown
         }]
       };
     } catch (error) {
+      const errorMarkdown = `## Error
+
+System prompt generation failed.
+
+### Error Details
+
+\`\`\`
+${error instanceof Error ? error.message : String(error)}
+\`\`\`
+
+### Troubleshooting
+
+- Verify that the \`templateId\` is valid
+- Ensure requirements are complete and valid
+- Check that verbosity level is one of: concise, standard, detailed
+
+### Need Help?
+
+Try generating with a different template or simplifying requirements.
+`;
+
       return {
         content: [{
           type: 'text',
-          text: JSON.stringify({
-            status: 'error',
-            error: 'Prompt generation failed',
-            details: error instanceof Error ? error.message : String(error)
-          }, null, 2)
+          text: errorMarkdown
         }]
       };
     }
@@ -272,17 +349,34 @@ class GenerateConfigFilesHandler {
       // Validate requirements
       const validationResult = agentRequirementsSchema.safeParse(input.requirements);
       if (!validationResult.success) {
+        const errors = validationResult.error.errors.map(err =>
+          `- **${err.path.join('.')}**: ${err.message}`
+        ).join('\n');
+
+        const errorMarkdown = `## Error
+
+Invalid requirements provided.
+
+### Validation Errors
+
+${errors}
+
+### Troubleshooting
+
+- Review the requirements object structure
+- Ensure all required fields are present
+- Check that enum values match allowed options
+- Verify data types match the schema
+
+### Need Help?
+
+Consult the requirements schema documentation or provide complete interview responses.
+`;
+
         return {
           content: [{
             type: 'text',
-            text: JSON.stringify({
-              status: 'error',
-              error: 'Invalid requirements',
-              details: validationResult.error.errors.map(err => ({
-                path: err.path.join('.'),
-                message: err.message
-              }))
-            }, null, 2)
+            text: errorMarkdown
           }]
         };
       }
@@ -296,6 +390,14 @@ class GenerateConfigFilesHandler {
       };
 
       const files: Record<string, string> = {};
+      const fileDescriptions: Record<string, string> = {
+        'agent.config.json': 'Agent configuration',
+        '.env.example': 'Environment variables template',
+        'package.json': 'Project dependencies and scripts',
+        'tsconfig.json': 'TypeScript compiler configuration',
+        'README.md': 'Project documentation',
+        'IMPLEMENTATION.md': 'Implementation guide'
+      };
 
       input.files?.forEach(fileType => {
         switch (fileType) {
@@ -320,39 +422,72 @@ class GenerateConfigFilesHandler {
         }
       });
 
-      const result = {
-        status: 'success',
-        files,
-        metadata: {
-          templateId: input.templateId,
-          agentName: input.agentName,
-          fileCount: Object.keys(files).length,
-          generatedFiles: Object.keys(files)
-        },
-        nextSteps: [
-          'Create a new project directory',
-          'Save each file to its appropriate location',
-          'Run npm install to install dependencies',
-          'Review and customize configurations as needed',
-          'Begin implementing tool logic'
-        ]
-      };
+      // Build Markdown document with all files
+      let markdown = `## Configuration Files Generated\n\n`;
+
+      // Add each file as a code block
+      for (const [filename, content] of Object.entries(files)) {
+        const ext = filename.split('.').pop();
+        let language = 'text';
+
+        if (filename.endsWith('.json')) language = 'json';
+        else if (filename.endsWith('.md')) language = 'markdown';
+        else if (filename.endsWith('.env') || filename === '.env.example') language = 'bash';
+        else if (filename.endsWith('.ts')) language = 'typescript';
+
+        markdown += `### File: \`${filename}\`\n\n`;
+        markdown += `\`\`\`${language}\n${content}\n\`\`\`\n\n`;
+        markdown += `**To use**: Copy the above content to \`${filename}\` in your project root.\n\n`;
+      }
+
+      // Add summary section
+      markdown += `## Files Generated Summary\n\n`;
+      Object.keys(files).forEach((filename, index) => {
+        const description = fileDescriptions[filename] || 'Configuration file';
+        markdown += `${index + 1}. \`${filename}\` - ${description}\n`;
+      });
+
+      // Add next steps
+      markdown += `\n## Next Steps\n\n`;
+      markdown += `1. Create a new project directory\n`;
+      markdown += `2. Copy each file above to its specified location\n`;
+      markdown += `3. Run \`npm install\` to install dependencies\n`;
+      markdown += `4. Review and customize configurations as needed\n`;
+      markdown += `5. Begin implementing tool logic in \`src/index.ts\`\n`;
 
       return {
         content: [{
           type: 'text',
-          text: JSON.stringify(result, null, 2)
+          text: markdown
         }]
       };
     } catch (error) {
+      const errorMarkdown = `## Error
+
+Configuration file generation failed.
+
+### Error Details
+
+\`\`\`
+${error instanceof Error ? error.message : String(error)}
+\`\`\`
+
+### Troubleshooting
+
+- Verify that the \`templateId\` is valid
+- Ensure requirements are complete and valid
+- Check that all required fields are present
+- Verify file types are valid options
+
+### Need Help?
+
+Try generating with a different template or fewer files initially.
+`;
+
       return {
         content: [{
           type: 'text',
-          text: JSON.stringify({
-            status: 'error',
-            error: 'Configuration generation failed',
-            details: error instanceof Error ? error.message : String(error)
-          }, null, 2)
+          text: errorMarkdown
         }]
       };
     }
