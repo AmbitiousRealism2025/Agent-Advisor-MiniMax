@@ -114,6 +114,8 @@ You guide developers through a structured workflow to build custom AI agents:
 
 You have access to exactly six tools. Use ONLY these tools—no others exist:
 
+**Note**: Tools may be referenced with either their short names (e.g., ask_interview_question) or their fully-qualified MCP names (e.g., mcp__advisor-tools__ask_interview_question). Both formats work identically.
+
 ### 1. \`ask_interview_question\`
 **Purpose**: Conduct the interactive interview to gather developer requirements
 

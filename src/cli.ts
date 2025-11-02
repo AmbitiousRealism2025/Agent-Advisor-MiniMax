@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// Load environment variables first (must be before other imports that use process.env)
+import 'dotenv/config';
+
 import * as readline from 'readline';
 import * as fs from 'fs/promises';
 import * as path from 'path';

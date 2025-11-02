@@ -9,7 +9,7 @@ export const minimaxEnvSchema = z.object({
     .trim()
     .min(1, 'Environment variable MINIMAX_JWT_TOKEN is required for MiniMax authentication.')
     .regex(jwtPattern, 'MINIMAX_JWT_TOKEN must be a valid JWT formatted token (three base64url-encoded segments separated by dots).'),
-  CLI_PATH: z.string().trim().min(1).optional()
+  CLI_PATH: z.string().trim().min(1).optional().or(z.literal(''))
 });
 
 type MinimaxEnvSchema = z.infer<typeof minimaxEnvSchema>;
