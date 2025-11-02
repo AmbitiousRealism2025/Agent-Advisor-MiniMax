@@ -11,11 +11,28 @@ Build an advisor agent that interviews developers, classifies their needs, and g
 ### Development Workflow
 ```bash
 npm install           # Install dependencies
-npm run build         # Compile TypeScript (dist/)
+npm run build         # Compile TypeScript (dist/) + make CLI executable
 npm run dev           # Watch-mode development (tsx)
 npm start             # Run compiled advisor from dist/
 npm run cli           # Interactive CLI (recommended)
 npm run advisor       # Direct advisor agent execution
+```
+
+### CLI Usage
+```bash
+# Local development
+npm run cli                         # Start interactive CLI
+npm run cli -- --no-clear           # Start without clearing screen
+
+# After building
+./dist/cli.js                       # Run built CLI directly
+
+# Global installation
+npm install -g agent-advisor-mvp
+agent-advisor                       # Run from anywhere
+
+# Using npx
+npx agent-advisor-mvp               # Run without installation
 ```
 
 ### Testing
@@ -103,8 +120,21 @@ The advisor uses **MCP (Model Context Protocol)** via `createSdkMcpServer()` to 
 **Streaming Events** (`src/advisor-agent.ts`):
 - `assistant:message` - Agent responses
 - `tool:use` - Tool invocations
-- `thinking` - Extended reasoning blocks (MiniMax-M2)
+- `thinking` - Extended reasoning blocks (MiniMax-M2) with smart truncation
 - `error` - Error handling
+
+**Thinking Block Truncation** (`src/advisor-agent.ts:12-53`):
+- **Smart Truncation Algorithm**: Preserves beginning and end of thinking text
+  - Keeps first 67% and last 33% of allowed length
+  - Example: `"This is a long thinking block message"` → `"This is a long th...king block message"`
+- **Configurable Length**: Set via `MAX_MESSAGE_LENGTH` environment variable
+  - Default: 300 characters
+  - Valid range: 50-1000 characters
+  - Auto-clamping to safe range
+- **Helper Functions**:
+  - `getMaxMessageLength()` - Reads and validates env variable
+  - `truncateMessage(text, maxLength)` - Applies 2:1 smart truncation
+- **Applied to Three Sites**: content_block_start thinking, content_block_delta thinking_delta, final thinking block
 
 **Module Organization**:
 - `src/lib/interview/` - Interactive interview state machine with session management
@@ -155,7 +185,23 @@ MINIMAX_JWT_TOKEN=your_jwt_token_here  # Required for MiniMax API access
 CLI_PATH=/Users/username/.claude/local/claude  # Optional Claude CLI path
 LOG_LEVEL=info                                  # Logging level (default: info)
 NODE_ENV=development                            # Environment (default: development)
+MAX_MESSAGE_LENGTH=300                          # Thinking block truncation length (default: 300, range: 50-1000)
+CLEAR_SCREEN=true                               # Clear console on CLI startup (default: true, accepts: true/false/1/0/yes/no)
 ```
+
+### CLI Flags
+```bash
+npm run cli                 # Interactive mode with default settings
+npm run cli -- --no-clear   # Interactive mode, preserve terminal history (disable screen clearing)
+npm run cli -- -i           # Explicitly enable interactive mode
+```
+
+**Screen Clearing Behavior**:
+- **Default**: CLI clears screen on startup for clean interactive experience
+- **Environment Variable**: Set `CLEAR_SCREEN=false` to preserve terminal output
+- **CLI Flag Override**: `--no-clear` flag takes precedence over environment variable
+- **TTY Guard**: Clearing only occurs in interactive TTY sessions, never in non-interactive mode
+- **Implementation**: `src/cli.ts:11-29` (helper), `src/cli.ts:553-561` (start method), `src/cli.ts:569-574` (flag parsing)
 
 ### MiniMax Configuration Pattern
 ```typescript
@@ -163,6 +209,7 @@ import { getMinimaxConfig } from './src/utils/minimax-config.js';
 
 const config = getMinimaxConfig();
 // Returns: { baseUrl: 'https://api.minimax.io/anthropic', apiKey: process.env.MINIMAX_JWT_TOKEN }
+// Validation powered by minimaxEnvSchema in src/utils/validation.ts
 ```
 
 ## Project Structure
@@ -185,15 +232,92 @@ src/
 tests/
 ├── fixtures/             # Sample requirements and responses
 ├── utils/                # Test helpers and factory functions
+│   ├── test-helpers.ts   # Temp dirs, TypeScript compilation, JSON validation
+│   ├── markdown-validator.ts  # Markdown parsing and validation utilities
+│   └── e2e-helpers.ts    # Simplified wrappers for E2E tests
 ├── unit/                 # Module-level tests
 ├── integration/          # Multi-module workflow tests
 ├── validation/           # TypeScript compilation checks
 └── e2e/                  # Complete workflow tests for all templates
+    ├── advisor-workflow.test.ts             # Full advisor workflow (interview → export)
+    ├── conversation-state.test.ts           # Session persistence and resume flows
+    ├── conversation-state-simple.test.ts    # Metadata smoke tests (10/10 passing)
+    ├── markdown-output-validation.test.ts   # Markdown structure validation
+    └── code-compilation-validation.test.ts  # TypeScript compilation from Markdown
 
 sessions/                 # Interview session persistence (gitignored)
 output/                   # Generated agent projects (gitignored)
 examples/                 # Reference implementations
 ```
+
+## E2E Testing Infrastructure
+
+### Markdown Validator (`tests/utils/markdown-validator.ts`)
+
+Comprehensive Markdown parsing and validation utilities:
+
+```typescript
+import {
+  parseMarkdownDocument,      // Parse Markdown into structured components
+  validateMarkdownStructure,  // Validate required elements (headers, code blocks, etc.)
+  extractCodeFromMarkdown,    // Extract code blocks by language
+  extractFileMapping,         // Map file headers to code content
+  validateCodeBlock,          // Validate individual code blocks
+} from '../utils/markdown-validator.js';
+```
+
+**Key Features**:
+- Regex-based parsing for sections, code blocks, file headers
+- Validates file headers: `### File: \`filename\``
+- Validates code fences with language tags: ` ```typescript `
+- Validates copy instructions: `**To use**: Copy...`
+- Returns structured validation results with errors and warnings
+
+### E2E Test Helpers (`tests/utils/e2e-helpers.ts`)
+
+Simplified wrappers that use internal generator classes and format outputs as Markdown:
+
+```typescript
+import {
+  generateAgentCode,           // Wraps CodeGenerator
+  generateSystemPrompt,        // Wraps PromptGenerator
+  generateConfigFiles,         // Wraps ConfigGenerator
+  generateImplementationGuide, // Wraps AgentPackager
+} from '../utils/e2e-helpers.js';
+```
+
+**Key Features**:
+- All functions return `GenerationResult` with `{ status, markdown?, error? }`
+- Formats outputs as Markdown matching tool handler behavior
+- Includes file headers, code fences, and copy instructions
+- Handles errors gracefully with Markdown-formatted error messages
+
+### E2E Test Suite
+
+**`tests/e2e/advisor-workflow.test.ts`**:
+- Tests complete workflow: interview → classification → generation → export
+- Validates all 5 templates with failure aggregation
+- Tests Markdown output structure for each phase
+- Tests error handling and verbosity options
+
+**`tests/e2e/conversation-state-simple.test.ts`** (10/10 passing):
+- Tests `ConversationMetadata` updates and retrieval
+- Validates timestamp tracking (lastActivity, conversationStarted)
+- Tests message count incrementing across updates
+- Tests state integration and rapid updates
+
+**`tests/e2e/markdown-output-validation.test.ts`**:
+- Validates Markdown structure for all generation tools
+- Tests file headers, code fences, copy instructions across tools
+- Tests cross-tool consistency in formatting
+- Validates JSON content in config files
+
+**`tests/e2e/code-compilation-validation.test.ts`**:
+- Extracts TypeScript code from Markdown
+- Compiles using `compileTypeScriptInTempDir()` helper
+- Filters module resolution errors (expected in isolated context)
+- Tests all 5 templates for syntax-error-free code
+- Validates code quality (imports, Zod schemas, async/await patterns)
 
 ## Five Agent Templates
 
@@ -221,11 +345,19 @@ import { ALL_TEMPLATES, getTemplateById, getTemplatesByCapability } from './src/
 - Use Zod for validation, not runtime type checking
 
 ### Tool Output Format
-- **All tool handlers return Markdown**: Generation and export tools format responses as Markdown documents
+- **Generation and export tools return Markdown**: All generation and export tool handlers format responses as Markdown documents
+- **Interview and classification tools return JSON**: Interview (`ask_interview_question`) and classification (`classify_agent_type`) return JSON objects
 - **Code Fences**: Use proper language tags (typescript, json, markdown, bash, env)
 - **File Headers**: Each code block prefixed with `### File: \`filename\``
 - **Copy Instructions**: Each code block followed by `**To use**: Copy the above code to...`
 - **Error Format**: Errors also returned as Markdown with `## Error` heading and troubleshooting sections
+
+### Task Management Prohibition
+- **Never use TodoWrite or task management tools**: The advisor outputs documentation only, not executable task lists
+- **TodoWrite, TodoRead, TodoUpdate are prohibited**: These tools create false expectations of execution
+- **Use numbered Markdown lists instead**: Present implementation steps as ordered lists (1., 2., 3.) in Markdown format
+- **User workflow**: Users receive Markdown documentation and implement steps themselves
+- **If tasks fail or are not executable**: Explicitly clear/cancel any presented todos and replace with numbered Markdown next-steps lists
 
 ### Session Persistence & Conversation Context
 - Sessions stored in `sessions/` directory (gitignored)
@@ -240,6 +372,26 @@ import { ALL_TEMPLATES, getTemplateById, getTemplatesByCapability } from './src/
 
 ### Template Spec Compliance
 **CRITICAL**: All templates must match exact MVP spec schemas in `agent_advisor_mvp-plan.md`. No nested parameter objects - all parameters must be top-level for Claude Agent SDK compatibility.
+
+## Tool Reference
+
+For complete tool documentation including parameter specifications, return formats, error codes, and usage examples, see **[TOOLS.md](./TOOLS.md)**.
+
+### Quick Summary
+
+**6 Tools Available**:
+1. **`ask_interview_question`** - Interactive interview workflow (JSON output)
+2. **`classify_agent_type`** - Template matching and recommendations (JSON output)
+3. **`generate_agent_code`** - TypeScript implementation (Markdown output)
+4. **`generate_system_prompt`** - Customized prompt (Markdown output)
+5. **`generate_config_files`** - Project configuration files (Markdown output)
+6. **`generate_implementation_guide`** - Implementation docs (Markdown output)
+
+**Key Distinction**:
+- Interview & classification tools return **JSON** with structured data
+- Generation & export tools return **Markdown** with code blocks and copy instructions
+
+See [TOOLS.md](./TOOLS.md) for detailed specifications, parameters, return formats, and error handling.
 
 ## Troubleshooting
 
@@ -352,7 +504,60 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 - Interactive CLI with session management
 
 ✅ **Recent Updates**:
-- **Test Suite Improvements** (Latest - 2025-11-02):
+- **E2E Testing Infrastructure** (Latest - 2025-11-02):
+  - Added comprehensive Markdown validator utility (`tests/utils/markdown-validator.ts`)
+  - Created E2E test helpers wrapping generator classes (`tests/utils/e2e-helpers.ts`)
+  - Implemented 4 new E2E test files covering full advisor workflow
+  - `advisor-workflow.test.ts` - Complete interview → classification → generation → export
+  - `conversation-state-simple.test.ts` - Conversation metadata (10/10 tests passing)
+  - `markdown-output-validation.test.ts` - Markdown structure validation for all tools
+  - `code-compilation-validation.test.ts` - TypeScript compilation from generated Markdown
+  - **Benefits**: Comprehensive validation of Markdown outputs, conversation persistence, and code quality
+- **Console Screen Clearing Control** (2025-11-02):
+  - Added `CLEAR_SCREEN` environment variable for controlling CLI startup behavior
+  - Implemented `--no-clear` CLI flag for runtime override
+  - Added `shouldClearScreen()` helper function (`src/cli.ts:11-29`)
+  - Updated `AdvisorCLI` constructor to accept optional `clearScreen` parameter
+  - TTY guard ensures clearing only occurs in interactive sessions
+  - Flag precedence: `--no-clear` > `CLEAR_SCREEN` env variable > default (true)
+  - Accepts flexible values: true/false, 1/0, yes/no (case-insensitive)
+  - Updated `.env.example` with comprehensive documentation and examples
+  - **Benefits**: Users can preserve terminal history when needed, safe TTY-only behavior
+- **TodoWrite Prohibition Enhancement** (2025-11-02):
+  - Added TodoWrite, TodoRead, TodoUpdate to PROHIBITED TOOLS in system prompt
+  - New "Task Management and Workflow" subsection in Best Practices
+  - Enhanced "Provide Complete Solutions" guideline to forbid TodoWrite
+  - Added guidance to clear todos when tasks fail or cannot be executed
+  - Documentation updates in CLAUDE.md and agents.md
+  - **Rationale**: Task management tools are incompatible with Markdown-only output philosophy and create false expectations that the advisor will execute tasks rather than provide documentation
+  - **Benefits**: Clearer advisor behavior, prevents confusion, reinforces documentation-first approach
+- **Comprehensive Tool Documentation** (2025-11-02):
+  - **System Prompt Corrections** (`src/advisor-agent.ts`):
+    - Fixed `ask_interview_question` tool: Actions (`start`, `answer`, `skip`, `resume`, `status`), removed invalid actions (`ask`, `complete`)
+    - Fixed `classify_agent_type` tool: Added `includeAlternatives` parameter, clarified JSON return format
+    - Updated parameter descriptions to match actual tool handler implementations
+  - **New Tool Reference Quick Guide** (CLAUDE.md, agents.md):
+    - Comprehensive reference section for all 6 tools before Troubleshooting section
+    - Detailed parameter descriptions with types and requirements
+    - Return format specifications with structure details
+    - Implementation file paths for easy code navigation
+    - Clear distinction between JSON (interview/classification) and Markdown (generation/export) outputs
+  - **Enhanced Available Tools Summary Table** (agents.md):
+    - Updated input column with complete parameter lists
+    - Clarified output format with structure details for JSON tools
+    - More descriptive and accurate tool specifications
+  - **Benefits**:
+    - Prevents tool hallucination through accurate documentation
+    - Improves developer onboarding with centralized tool reference
+    - Ensures advisor agent and developers use correct parameters
+    - Provides quick lookup for tool usage patterns
+- **Thinking Block Truncation Enhancement** (2025-11-02):
+  - Implemented smart truncation algorithm with 2:1 split (first 67%, last 33%)
+  - Configurable via `MAX_MESSAGE_LENGTH` env variable (default 300, range 50-1000)
+  - Centralized helper functions: `getMaxMessageLength()` and `truncateMessage()`
+  - Applied to all three thinking block streaming sites in advisor-agent.ts
+  - Updated .env.example with comprehensive documentation and examples
+- **Test Suite Improvements** (2025-11-02):
   - **Export Test Refactoring**: Eliminated redundant retry loops, DRY violations, and fixed sleeps
     - Removed outer retry loops in `afterEach` cleanup (test helpers already have retry logic)
     - Centralized file-existence checks using shared `waitForFileExists()` helper

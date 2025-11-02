@@ -13,13 +13,6 @@ export default defineConfig({
     environment: 'node',
     // Use process forking for better test isolation
     pool: 'forks',
-    // IMPORTANT: Disable parallel file execution for file I/O tests
-    // Rationale: Export tests (file-writer, packager) create/delete temp directories
-    // and perform heavy file I/O operations. Running these in parallel causes race
-    // conditions and ENOENT errors. Once export tests are stabilized and refactored
-    // to use isolated temp directories per test file, this can be re-enabled.
-    // TODO: Consider scoping this to export tests only via separate config
-    fileParallelism: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
@@ -41,13 +34,11 @@ export default defineConfig({
     // Increased timeouts for file I/O operations with retries
     testTimeout: 15000,
     hookTimeout: 15000,
-    // Ensure deterministic test execution
-    // Rationale: File I/O tests require sequential execution to avoid race conditions
-    // on shared temp directory paths and cleanup operations. Shuffling could cause
-    // tests to fail due to timing dependencies in afterEach cleanup.
+    // Ensure deterministic ordering within files while allowing Vitest to schedule
+    // test files in parallel now that export tests isolate their temp directories.
     sequence: {
       shuffle: false,
-      concurrent: false
+      concurrent: true
     },
     setupFiles: ['./tests/setup.ts']
   },

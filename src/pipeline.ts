@@ -317,11 +317,11 @@ export class AgentGenerationPipeline {
   } {
     const state = this.interviewManager.getState();
     const sessionActive = !state.isComplete;
-    const currentStage = state.currentStage;
-
-    // Calculate progress based on answered questions
-    const totalQuestions = 15;
-    const progress = (state.currentQuestionIndex / totalQuestions) * 100;
+    const progressInfo = this.interviewManager.getProgress();
+    const currentStage = progressInfo.currentStage;
+    const progress = progressInfo.total > 0
+      ? (progressInfo.answered / progressInfo.total) * 100
+      : 0;
 
     return {
       sessionActive,

@@ -15,6 +15,8 @@ Welcome to the Agent Advisor MiniMax MVP. This document gives future coding agen
    - `MINIMAX_JWT_TOKEN` — required MiniMax JWT credential.
    - `CLI_PATH` — optional local Claude CLI path for advanced tooling.
    - `LOG_LEVEL` (default `info`) and `NODE_ENV` (default `development`).
+   - `MAX_MESSAGE_LENGTH` — optional thinking block truncation length (default `300`, range `50-1000`).
+   - `CLEAR_SCREEN` — optional console clearing on CLI startup (default `true`, accepts `true/false/1/0/yes/no`).
 5. Verify TypeScript builds with `npm run build` before committing changes.
 
 ## Project Layout
@@ -30,6 +32,21 @@ src/
 └── utils/                # Configuration + validation helpers
 
 tests/                    # Vitest suites (Phase 2+)
+├── fixtures/             # Sample requirements and responses
+├── utils/                # Test helpers and utilities
+│   ├── test-helpers.ts   # Temp dirs, TypeScript compilation, JSON validation
+│   ├── markdown-validator.ts  # Markdown parsing and validation
+│   └── e2e-helpers.ts    # E2E test wrappers for generators
+├── unit/                 # Module-level tests
+├── integration/          # Multi-module workflow tests
+├── validation/           # TypeScript compilation checks
+└── e2e/                  # End-to-end workflow tests
+    ├── advisor-workflow.test.ts
+    ├── conversation-state.test.ts
+    ├── conversation-state-simple.test.ts
+    ├── markdown-output-validation.test.ts
+    └── code-compilation-validation.test.ts
+
 examples/                 # Generated reference projects
 ```
 
@@ -37,7 +54,34 @@ examples/                 # Generated reference projects
 - `npm run dev` — Watch-mode development via `tsx`.
 - `npm run build` — TypeScript compilation with declaration output.
 - `npm run test` — Vitest test runner (add coverage as features land).
+- `npm run test:e2e` — Run end-to-end workflow tests.
 - `npm start` — Execute the compiled advisor agent from `dist/`.
+
+## E2E Testing Infrastructure
+
+### Markdown Validator (`tests/utils/markdown-validator.ts`)
+Comprehensive utilities for parsing and validating Markdown outputs:
+- `parseMarkdownDocument()` — Parse into structured components (sections, code blocks, metadata)
+- `validateMarkdownStructure()` — Validate required elements (headers, code fences, copy instructions)
+- `extractCodeFromMarkdown()` — Extract code blocks by language tag
+- `extractFileMapping()` — Map file headers to code content
+- `validateCodeBlock()` — Validate individual code blocks
+
+### E2E Test Helpers (`tests/utils/e2e-helpers.ts`)
+Simplified wrappers for testing generation without full MCP setup:
+- `generateAgentCode()` — Wraps `CodeGenerator` with Markdown formatting
+- `generateSystemPrompt()` — Wraps `PromptGenerator` with Markdown formatting
+- `generateConfigFiles()` — Wraps `ConfigGenerator` with Markdown formatting
+- `generateImplementationGuide()` — Wraps `AgentPackager` with Markdown formatting
+
+All functions return `{ status: 'success' | 'error', markdown?, error? }`.
+
+### E2E Test Suite
+- **`advisor-workflow.test.ts`** — Complete workflow from interview to export, all 5 templates
+- **`conversation-state.test.ts`** — Session persistence, resume flow, and multi-session handling
+- **`conversation-state-simple.test.ts`** — Conversation metadata tracking (10/10 passing)
+- **`markdown-output-validation.test.ts`** — Markdown structure validation for all generation tools
+- **`code-compilation-validation.test.ts`** — TypeScript compilation from generated Markdown
 
 ## Implementation Status
 
@@ -95,6 +139,13 @@ manager.recordResponse(question.id, 'My Agent Name');
 
 #### Interview Flow
 The `ask_interview_question` tool supports the following actions:
+
+**Parameters:**
+- `action`: `"start"` | `"answer"` | `"skip"` | `"resume"` | `"status"` (required)
+- `sessionId`: Session identifier (optional, required for answer/skip/resume/status actions)
+- `response`: Answer to current question (optional, required for answer action; can be string, boolean, or array of strings)
+
+**Return Format:** JSON object with session state, next question, or completion status
 
 **Start a new session:**
 ```json
@@ -345,6 +396,12 @@ Intelligent template matching engine with multi-factor scoring:
 **2. Classification Tool (`src/lib/classification/tool-handler.ts`)**
 
 Claude Agent SDK tool: `classify_agent_type`
+
+**Parameters:**
+- `requirements`: Complete AgentRequirements object from interview session (required)
+- `includeAlternatives`: Whether to include alternative template recommendations (optional, default: true)
+
+**Return Format:** JSON object (not Markdown) with detailed structure
 
 **Input Schema:**
 ```typescript
@@ -743,6 +800,34 @@ Required in `.env`:
 - `CLI_PATH` - Optional Claude CLI path
 - `LOG_LEVEL` - Logging verbosity (default: `info`)
 - `NODE_ENV` - Environment mode (default: `development`)
+- `MAX_MESSAGE_LENGTH` - Optional thinking block truncation length (default: `300`, range: `50-1000`)
+- `CLEAR_SCREEN` - Optional console clearing on CLI startup (default: `true`, accepts: `true/false/1/0/yes/no`)
+
+**5. Thinking Block Truncation** (`src/advisor-agent.ts:12-53`)
+The advisor implements smart truncation for MiniMax-M2 thinking blocks:
+- **Algorithm**: Preserves first 67% and last 33% of text with `...` separator
+- **Configurable**: Set via `MAX_MESSAGE_LENGTH` environment variable
+- **Default**: 300 characters (upgradeable from previous 80-char hardcoded limit)
+- **Valid Range**: 50-1000 characters with automatic clamping
+- **Helper Functions**:
+  - `getMaxMessageLength()` - Validates and returns configured max length
+  - `truncateMessage(text, maxLength)` - Applies smart 2:1 truncation algorithm
+- **Applied To**: All three thinking block streaming event handlers
+
+**6. Console Screen Clearing** (`src/cli.ts:11-29, 553-561, 569-574`)
+The interactive CLI provides configurable screen clearing on startup:
+- **Default Behavior**: Screen clears on startup for clean interactive experience
+- **Environment Variable**: `CLEAR_SCREEN` controls default behavior
+  - Accepts: `true/false`, `1/0`, `yes/no` (case-insensitive)
+  - Default: `true` when not set or unrecognized value
+- **CLI Flag Override**: `--no-clear` flag takes precedence over environment variable
+  - Usage: `npm run cli -- --no-clear`
+- **TTY Guard**: Clearing only occurs when `process.stdout.isTTY` is true
+  - Protects non-interactive sessions from side effects
+  - Single-query mode never clears screen
+- **Helper Function**: `shouldClearScreen()` parses environment variable
+- **Constructor Parameter**: `AdvisorCLI` accepts optional `clearScreen?: boolean`
+- **Precedence**: CLI flag > Environment variable > Default (true)
 
 ## Implementation Notes
 - Use `getMinimaxConfig()` from `src/utils/minimax-config.ts` to standardize MiniMax access.
@@ -783,8 +868,99 @@ Required in `.env`:
 - Import paths use `.js` extensions for ESM compatibility with `module: "NodeNext"`.
 - **Template Spec Compliance:** All templates strictly follow the MVP spec defined in `agent_advisor_mvp-plan.md`. The Data Analyst template schema was updated to remove nested objects (`parseOptions`, `config`, `options`), align field names/types, and ensure classifier/generator compatibility. Never deviate from spec schemas without updating the plan document first.
 - **Markdown-Only Output:** Generation and export tools return Markdown documents, NOT JSON. Never return raw JSON from tool handlers in generation/export modules. System prompt explicitly forbids file operations (Bash, Write, Edit). Users control persistence via CLI `/save` command.
+- **Task Management Tools Prohibited:** TodoWrite, TodoRead, TodoUpdate, and all task management tools are explicitly forbidden in the advisor's system prompt. These tools create false expectations that the advisor will execute tasks rather than provide documentation. The advisor outputs Markdown documentation with numbered lists for implementation steps. If tasks fail or cannot be executed, the advisor must explicitly clear/cancel any presented todos and replace them with numbered Markdown next-steps lists for users to follow.
 
 ## Recent Improvements
+
+### 2025-11-02: TodoWrite Prohibition Enhancement
+**Focus**: Prevent task management tool usage that conflicts with Markdown-only output philosophy
+
+#### System Prompt Updates (`src/advisor-agent.ts`)
+- ✅ **PROHIBITED TOOLS Expansion**: Added TodoWrite, TodoRead, TodoUpdate, and "any task management tools" to prohibited list
+- ✅ **Explanatory Note**: Added rationale explaining that task management tools are incompatible with advisor's Markdown-only deliverables and create false expectations of execution
+- ✅ **New "Task Management and Workflow" Subsection** in Best Practices:
+  - Never use TodoWrite or any task management tools
+  - Output is documentation only, users implement themselves
+  - Provide numbered Markdown next steps instead of todos
+  - Use Markdown ordered lists (1., 2., 3.) for implementation steps
+  - If task fails or cannot execute: explicitly clear/cancel todos and replace with Markdown lists
+- ✅ **Enhanced "Provide Complete Solutions" Guideline**: Added explicit prohibition of TodoWrite tasks and reinforcement that output is documentation for users to implement
+
+#### Documentation Updates
+- ✅ **CLAUDE.md**: Added "Task Management Prohibition" section in Implementation Notes (lines 245-250)
+- ✅ **agents.md**: Added "Recent Improvements" section documenting the enhancement
+
+#### Benefits
+- ✅ Prevents advisor from creating false expectations of task execution
+- ✅ Reinforces Markdown-only documentation philosophy throughout system prompt
+- ✅ Provides clear guidance on proper alternatives (numbered Markdown lists)
+- ✅ Handles failure cases explicitly (clear todos, provide user-actionable lists)
+- ✅ Improves consistency between advisor behavior and system architecture
+
+### 2025-11-02: Comprehensive Tool Documentation Enhancement
+**Focus**: Complete tool reference with accurate parameters, return formats, and implementation paths
+
+#### Documentation Updates
+- ✅ **System Prompt Corrections** (`src/advisor-agent.ts`):
+  - **ask_interview_question Tool**:
+    - Corrected actions list: `start`, `answer`, `skip`, `resume`, `status`
+    - Removed invalid actions: `ask`, `complete` (never existed in implementation)
+    - Fixed parameter descriptions: `action` (required), `sessionId` (optional), `response` (optional)
+    - Clarified return format: JSON object with session state
+  - **classify_agent_type Tool**:
+    - Fixed parameters: `requirements` (AgentRequirements), `includeAlternatives` (default: true)
+    - Corrected return format: JSON object (not Markdown) with complete structure
+    - Added structure description: status, classification, recommendations, alternatives, nextSteps
+- ✅ **New Tool Reference Quick Guide** (CLAUDE.md lines 259-295, agents.md lines 929-998):
+  - Comprehensive reference section for all 6 tools
+  - Detailed sections for each tool with purpose, parameters, return format, implementation path
+  - Clear distinction between JSON outputs (interview, classification) and Markdown outputs (generation, export)
+  - Action descriptions for interview tool (start, answer, skip, resume, status)
+  - Parameter optionality and requirements clearly marked
+  - File paths for easy code navigation
+- ✅ **Enhanced Available Tools Summary Table** (agents.md line 1000+):
+  - Updated input column with complete parameter lists and types
+  - Clarified output format column with detailed structure for JSON tools
+  - More accurate and descriptive tool specifications
+- ✅ **Documentation Files Updated**:
+  - `src/advisor-agent.ts` - System prompt Available Tools section (lines 117-152)
+  - `CLAUDE.md` - Tool output format (lines 237-243), quick guide (lines 259-295), recent updates (lines 405-443)
+  - `agents.md` - Interview flow (lines 97-148), classification tool (lines 353-383), quick guide (lines 929-998), summary table (lines 1000+), recent improvements (lines 884+)
+
+#### Benefits
+- ✅ **Prevents Tool Hallucination**: Accurate documentation matches actual implementations
+- ✅ **Improved Developer Onboarding**: Centralized tool reference for quick lookup
+- ✅ **Better Agent Behavior**: Advisor agent uses correct parameters and understands return formats
+- ✅ **Easier Code Navigation**: Implementation file paths included in documentation
+- ✅ **Clear Output Format Distinction**: Developers understand JSON vs Markdown outputs
+- ✅ **Comprehensive Coverage**: All 6 tools fully documented with parameters, returns, and usage
+
+### 2025-11-02: Thinking Block Truncation Enhancement
+**Focus**: Smart truncation with configurable length for better thinking block visibility
+
+#### Implementation Details
+- ✅ **Smart Truncation Algorithm**: 2:1 split preserving beginning (67%) and end (33%) of text
+  - Example: Long text becomes `"Start of message...end of message"` instead of just `"Start of message..."`
+  - Applied to all three thinking block streaming sites in `src/advisor-agent.ts`
+- ✅ **Configurable Length**: `MAX_MESSAGE_LENGTH` environment variable
+  - Default: 300 characters (upgraded from 80-char hardcoded limit)
+  - Valid range: 50-1000 with automatic clamping
+  - Parsing and validation handles invalid/missing values gracefully
+- ✅ **Centralized Helpers**: Eliminated code duplication
+  - `getMaxMessageLength()` - Single source of truth for max length configuration
+  - `truncateMessage(text, maxLength)` - Reusable truncation logic with JSDoc
+  - Replaced three separate inline truncation blocks
+- ✅ **Documentation Updates**:
+  - `.env.example` - Added comprehensive MAX_MESSAGE_LENGTH documentation with examples
+  - `CLAUDE.md` - Documented truncation system in architecture and recent updates
+  - `agents.md` - Added thinking block truncation section with algorithm details
+
+#### Benefits
+- ✅ Better visibility into agent reasoning with configurable truncation
+- ✅ Preserves context from both start and end of thinking blocks
+- ✅ User control via environment variable for different use cases
+- ✅ Cleaner codebase with centralized helper functions
+- ✅ Production-safe with validation and clamping
 
 ### 2025-11-02: Export Test Refactoring
 **Focus**: Eliminated test flakiness, improved reliability, better documentation
@@ -844,12 +1020,32 @@ Required in `.env`:
 - ✅ `getProgress()` - Structured progress tracking with percentage calculation
 - ✅ Better support for progress monitoring and UI integration
 
+## Tool Reference
+
+For complete tool documentation including parameter specifications, return formats, error codes, workflow examples, and troubleshooting guidance, see **[TOOLS.md](./TOOLS.md)**.
+
+### Quick Reference
+
+**6 Tools in Workflow**:
+1. **`ask_interview_question`** - Interactive interview (JSON) - `src/lib/interview/tool-handler.ts`
+2. **`classify_agent_type`** - Template matching (JSON) - `src/lib/classification/tool-handler.ts`
+3. **`generate_agent_code`** - TypeScript implementation (Markdown) - `src/lib/generation/tool-handlers.ts`
+4. **`generate_system_prompt`** - Customized prompt (Markdown) - `src/lib/generation/tool-handlers.ts`
+5. **`generate_config_files`** - Project configuration (Markdown) - `src/lib/generation/tool-handlers.ts`
+6. **`generate_implementation_guide`** - Setup documentation (Markdown) - `src/lib/export/tool-handler.ts`
+
+**Output Format Key**:
+- **JSON**: Interview and classification (structured data)
+- **Markdown**: Generation and export (code fences with copy instructions)
+
+See [TOOLS.md](./TOOLS.md) for detailed specifications.
+
 ## Available Tools Summary
 
 | Phase | Tool Name | Purpose | Input | Output Format |
 |-------|-----------|---------|-------|---------------|
-| Interview | `ask_interview_question` | Gather requirements | action, sessionId?, response? | JSON (questions/requirements) |
-| Classification | `classify_agent_type` | Recommend template | AgentRequirements | JSON (recommendations) |
+| Interview | `ask_interview_question` | Gather requirements | action (start\|answer\|skip\|resume\|status), sessionId?, response? | JSON (questions/requirements) |
+| Classification | `classify_agent_type` | Recommend template | requirements (AgentRequirements), includeAlternatives? (default: true) | JSON (status, classification, recommendations, alternatives, nextSteps) |
 | Generation | `generate_agent_code` | Create implementation | templateId, agentName, options | **Markdown** with TypeScript code fence |
 | Generation | `generate_system_prompt` | Customize prompt | templateId, requirements, options | **Markdown** with prompt code fence |
 | Generation | `generate_config_files` | Create project files | templateId, agentName, requirements | **Markdown** with multiple file code fences |

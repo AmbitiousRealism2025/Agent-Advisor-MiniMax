@@ -5,6 +5,8 @@ import { PromptGenerator } from './prompt-generator.js';
 import { ConfigGenerator } from './config-generator.js';
 import { agentRequirementsSchema } from '../../utils/validation.js';
 import type { AgentRequirements, AgentRecommendations } from '../../types/agent.js';
+import { ErrorCodes, createToolError, formatToolErrorAsMarkdown } from '../../types/errors.js';
+import { ALL_TEMPLATES } from '../../templates/index.js';
 
 /**
  * Schema for generate_agent_code tool
@@ -129,6 +131,48 @@ class GenerateAgentCodeHandler {
 
   async handle(input: GenerateAgentCodeInput): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
     try {
+      // Validate template ID
+      const validTemplates = ALL_TEMPLATES.map(t => t.id);
+      if (!validTemplates.includes(input.templateId)) {
+        const error = createToolError(
+          ErrorCodes.INVALID_TEMPLATE,
+          `Invalid template ID: ${input.templateId}`,
+          {
+            field: 'templateId',
+            validValues: validTemplates,
+            context: { provided: input.templateId }
+          }
+        );
+        return {
+          content: [{
+            type: 'text',
+            text: formatToolErrorAsMarkdown(error)
+          }]
+        };
+      }
+
+      // Validate agent name (basic non-empty check)
+      const trimmedName = input.agentName.trim();
+      if (!trimmedName || trimmedName.length === 0) {
+        const error = createToolError(
+          ErrorCodes.INVALID_AGENT_NAME,
+          'Agent name cannot be empty',
+          {
+            field: 'agentName',
+            context: {
+              provided: input.agentName,
+              requirement: 'Must be a non-empty string'
+            }
+          }
+        );
+        return {
+          content: [{
+            type: 'text',
+            text: formatToolErrorAsMarkdown(error)
+          }]
+        };
+      }
+
       const code = this.generator.generateFullCode({
         templateId: input.templateId,
         agentName: input.agentName,
@@ -177,31 +221,22 @@ ${code}
         }]
       };
     } catch (error) {
-      const errorMarkdown = `## Error
-
-Code generation failed.
-
-### Error Details
-
-\`\`\`
-${error instanceof Error ? error.message : String(error)}
-\`\`\`
-
-### Troubleshooting
-
-- Verify that the \`templateId\` is valid (data-analyst, content-creator, code-assistant, research-agent, or automation-agent)
-- Ensure the \`agentName\` is a valid identifier
-- Check that all required parameters are provided
-
-### Need Help?
-
-Try re-running the generation with a different template or contact support.
-`;
+      const toolError = createToolError(
+        ErrorCodes.GENERATION_FAILED,
+        'Code generation failed',
+        {
+          context: {
+            templateId: input.templateId,
+            agentName: input.agentName,
+            errorMessage: error instanceof Error ? error.message : String(error)
+          }
+        }
+      );
 
       return {
         content: [{
           type: 'text',
-          text: errorMarkdown
+          text: formatToolErrorAsMarkdown(toolError)
         }]
       };
     }
@@ -220,37 +255,49 @@ class GenerateSystemPromptHandler {
 
   async handle(input: GenerateSystemPromptInput): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
     try {
+      // Validate template ID
+      const validTemplates = ALL_TEMPLATES.map(t => t.id);
+      if (!validTemplates.includes(input.templateId)) {
+        const error = createToolError(
+          ErrorCodes.INVALID_TEMPLATE,
+          `Invalid template ID: ${input.templateId}`,
+          {
+            field: 'templateId',
+            validValues: validTemplates,
+            context: { provided: input.templateId }
+          }
+        );
+        return {
+          content: [{
+            type: 'text',
+            text: formatToolErrorAsMarkdown(error)
+          }]
+        };
+      }
+
       // Validate requirements
       const validationResult = agentRequirementsSchema.safeParse(input.requirements);
       if (!validationResult.success) {
-        const errors = validationResult.error.errors.map(err =>
-          `- **${err.path.join('.')}**: ${err.message}`
-        ).join('\n');
+        const validationErrors = validationResult.error.errors.map(err => ({
+          path: err.path.join('.'),
+          message: err.message
+        }));
 
-        const errorMarkdown = `## Error
-
-Invalid requirements provided.
-
-### Validation Errors
-
-${errors}
-
-### Troubleshooting
-
-- Review the requirements object structure
-- Ensure all required fields are present
-- Check that enum values match allowed options
-- Verify data types match the schema
-
-### Need Help?
-
-Consult the requirements schema documentation or provide complete interview responses.
-`;
+        const error = createToolError(
+          ErrorCodes.INVALID_REQUIREMENTS,
+          'Invalid requirements provided',
+          {
+            validationErrors,
+            context: {
+              errorCount: validationErrors.length
+            }
+          }
+        );
 
         return {
           content: [{
             type: 'text',
-            text: errorMarkdown
+            text: formatToolErrorAsMarkdown(error)
           }]
         };
       }
@@ -303,31 +350,21 @@ ${prompt}
         }]
       };
     } catch (error) {
-      const errorMarkdown = `## Error
-
-System prompt generation failed.
-
-### Error Details
-
-\`\`\`
-${error instanceof Error ? error.message : String(error)}
-\`\`\`
-
-### Troubleshooting
-
-- Verify that the \`templateId\` is valid
-- Ensure requirements are complete and valid
-- Check that verbosity level is one of: concise, standard, detailed
-
-### Need Help?
-
-Try generating with a different template or simplifying requirements.
-`;
+      const toolError = createToolError(
+        ErrorCodes.GENERATION_FAILED,
+        'System prompt generation failed',
+        {
+          context: {
+            templateId: input.templateId,
+            errorMessage: error instanceof Error ? error.message : String(error)
+          }
+        }
+      );
 
       return {
         content: [{
           type: 'text',
-          text: errorMarkdown
+          text: formatToolErrorAsMarkdown(toolError)
         }]
       };
     }
@@ -346,37 +383,71 @@ class GenerateConfigFilesHandler {
 
   async handle(input: GenerateConfigFilesInput): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
     try {
+      // Validate template ID
+      const validTemplates = ALL_TEMPLATES.map(t => t.id);
+      if (!validTemplates.includes(input.templateId)) {
+        const error = createToolError(
+          ErrorCodes.INVALID_TEMPLATE,
+          `Invalid template ID: ${input.templateId}`,
+          {
+            field: 'templateId',
+            validValues: validTemplates,
+            context: { provided: input.templateId }
+          }
+        );
+        return {
+          content: [{
+            type: 'text',
+            text: formatToolErrorAsMarkdown(error)
+          }]
+        };
+      }
+
+      // Validate agent name (basic non-empty check)
+      const trimmedName = input.agentName.trim();
+      if (!trimmedName || trimmedName.length === 0) {
+        const error = createToolError(
+          ErrorCodes.INVALID_AGENT_NAME,
+          'Agent name cannot be empty',
+          {
+            field: 'agentName',
+            context: {
+              provided: input.agentName,
+              requirement: 'Must be a non-empty string'
+            }
+          }
+        );
+        return {
+          content: [{
+            type: 'text',
+            text: formatToolErrorAsMarkdown(error)
+          }]
+        };
+      }
+
       // Validate requirements
       const validationResult = agentRequirementsSchema.safeParse(input.requirements);
       if (!validationResult.success) {
-        const errors = validationResult.error.errors.map(err =>
-          `- **${err.path.join('.')}**: ${err.message}`
-        ).join('\n');
+        const validationErrors = validationResult.error.errors.map(err => ({
+          path: err.path.join('.'),
+          message: err.message
+        }));
 
-        const errorMarkdown = `## Error
-
-Invalid requirements provided.
-
-### Validation Errors
-
-${errors}
-
-### Troubleshooting
-
-- Review the requirements object structure
-- Ensure all required fields are present
-- Check that enum values match allowed options
-- Verify data types match the schema
-
-### Need Help?
-
-Consult the requirements schema documentation or provide complete interview responses.
-`;
+        const error = createToolError(
+          ErrorCodes.INVALID_REQUIREMENTS,
+          'Invalid requirements provided',
+          {
+            validationErrors,
+            context: {
+              errorCount: validationErrors.length
+            }
+          }
+        );
 
         return {
           content: [{
             type: 'text',
-            text: errorMarkdown
+            text: formatToolErrorAsMarkdown(error)
           }]
         };
       }
@@ -462,32 +533,23 @@ Consult the requirements schema documentation or provide complete interview resp
         }]
       };
     } catch (error) {
-      const errorMarkdown = `## Error
-
-Configuration file generation failed.
-
-### Error Details
-
-\`\`\`
-${error instanceof Error ? error.message : String(error)}
-\`\`\`
-
-### Troubleshooting
-
-- Verify that the \`templateId\` is valid
-- Ensure requirements are complete and valid
-- Check that all required fields are present
-- Verify file types are valid options
-
-### Need Help?
-
-Try generating with a different template or fewer files initially.
-`;
+      const toolError = createToolError(
+        ErrorCodes.GENERATION_FAILED,
+        'Configuration file generation failed',
+        {
+          context: {
+            templateId: input.templateId,
+            agentName: input.agentName,
+            fileCount: input.files?.length || 0,
+            errorMessage: error instanceof Error ? error.message : String(error)
+          }
+        }
+      );
 
       return {
         content: [{
           type: 'text',
-          text: errorMarkdown
+          text: formatToolErrorAsMarkdown(toolError)
         }]
       };
     }

@@ -1,11 +1,24 @@
 {
   "name": "agent-advisor-mvp",
   "version": "1.0.0",
+  "description": "AI-powered advisor agent that guides developers through creating custom Claude Agent SDK projects integrated with MiniMax API",
   "type": "module",
   "main": "dist/advisor-agent.js",
+  "bin": {
+    "agent-advisor": "./dist/cli.js"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "claude",
+    "minimax",
+    "advisor",
+    "cli",
+    "code-generation"
+  ],
   "scripts": {
     "dev": "tsx watch src/advisor-agent.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && chmod +x dist/cli.js",
     "test": "vitest",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
