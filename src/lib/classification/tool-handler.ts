@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { AgentClassifier } from './classifier.js';
 import { agentRequirementsSchema } from '../../utils/validation.js';
 import type { AgentRequirements } from '../../types/agent.js';
+import { ErrorCodes, createToolError } from '../../types/errors.js';
 
 /**
  * Input schema for classify_agent_type tool
@@ -58,16 +59,30 @@ class ClassifyAgentTypeHandler {
       const validationResult = agentRequirementsSchema.safeParse(input.requirements);
 
       if (!validationResult.success) {
+        const validationErrors = validationResult.error.errors.map(err => ({
+          path: err.path.join('.'),
+          message: err.message
+        }));
+
+        const error = createToolError(
+          ErrorCodes.INVALID_REQUIREMENTS,
+          'Invalid agent requirements',
+          {
+            validationErrors,
+            context: {
+              errorCount: validationErrors.length
+            }
+          }
+        );
+
         return {
           content: [{
             type: 'text',
             text: JSON.stringify({
               status: 'error',
-              error: 'Invalid agent requirements',
-              details: validationResult.error.errors.map(err => ({
-                path: err.path.join('.'),
-                message: err.message
-              }))
+              error: error.message,
+              code: error.code,
+              details: error.details
             }, null, 2)
           }]
         };
@@ -81,6 +96,34 @@ class ClassifyAgentTypeHandler {
       // Get template scores for alternatives
       const scores = this.classifier.scoreAllTemplates(requirements);
       const primaryScore = scores[0];
+
+      // Check if no matching template found (very low confidence)
+      if (primaryScore.score < 30) {
+        const error = createToolError(
+          ErrorCodes.NO_MATCHING_TEMPLATE,
+          'No suitable template found for requirements',
+          {
+            context: {
+              highestScore: primaryScore.score,
+              templateAttempted: primaryScore.templateId,
+              suggestion: 'Consider adjusting requirements or capabilities'
+            }
+          }
+        );
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              status: 'error',
+              error: error.message,
+              code: error.code,
+              details: error.details
+            }, null, 2)
+          }]
+        };
+      }
+
       const alternatives = input.includeAlternatives ? scores.slice(1, 4) : [];
 
       // Build response
@@ -111,10 +154,10 @@ class ClassifyAgentTypeHandler {
           reasoning: alt.reasoning
         })),
         nextSteps: [
-          'Review the recommended template and tools',
-          'Use generate_agent_code tool to create starter code',
-          'Use generate_system_prompt tool to customize the system prompt',
-          'Use generate_config_files tool to create project configuration'
+          'Review the recommended template and capability alignment',
+          'Use generate_planning_document tool to create the full project plan',
+          'Share the planning document with stakeholders for validation',
+          'Execute the implementation plan with human oversight'
         ],
         notes: recommendations.notes
       };
@@ -126,13 +169,24 @@ class ClassifyAgentTypeHandler {
         }]
       };
     } catch (error) {
+      const toolError = createToolError(
+        ErrorCodes.INTERNAL_ERROR,
+        'Classification failed',
+        {
+          context: {
+            errorMessage: error instanceof Error ? error.message : String(error)
+          }
+        }
+      );
+
       return {
         content: [{
           type: 'text',
           text: JSON.stringify({
             status: 'error',
-            error: 'Classification failed',
-            details: error instanceof Error ? error.message : String(error)
+            error: toolError.message,
+            code: toolError.code,
+            details: toolError.details
           }, null, 2)
         }]
       };

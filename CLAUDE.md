@@ -4,18 +4,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Mission Overview
 
-Build an advisor agent that interviews developers, classifies their needs, and generates Claude Agent SDK projects targeting the MiniMax API. All generated code must work with Node.js 18+, the MiniMax-M2 model, and the Claude Agent SDK.
+Build an advisor agent that interviews developers, classifies needs, and generates comprehensive planning documents for Claude Agent SDK implementation targeting the MiniMax API. The output is a single Markdown planning document with 8 sections providing actionable implementation guidance.
 
 ## Essential Commands
 
 ### Development Workflow
 ```bash
 npm install           # Install dependencies
-npm run build         # Compile TypeScript (dist/)
+npm run build         # Compile TypeScript (dist/) + make CLI executable
 npm run dev           # Watch-mode development (tsx)
 npm start             # Run compiled advisor from dist/
 npm run cli           # Interactive CLI (recommended)
 npm run advisor       # Direct advisor agent execution
+```
+
+### CLI Usage
+```bash
+# Local development
+npm run cli                         # Start interactive CLI
+npm run cli -- --no-clear           # Start without clearing screen
+
+# After building
+./dist/cli.js                       # Run built CLI directly
+
+# Global installation
+npm install -g agent-advisor-mvp
+agent-advisor                       # Run from anywhere
+
+# Using npx
+npx agent-advisor-mvp               # Run without installation
 ```
 
 ### Testing
@@ -39,7 +56,7 @@ npx vitest run tests/unit/interview/state-manager.test.ts
 npx vitest run -t "should validate"
 
 # Watch specific file
-npx vitest watch tests/unit/generation/code-generator.test.ts
+npx vitest watch tests/unit/classification/classifier.test.ts
 ```
 
 ## Architecture Overview
@@ -50,8 +67,7 @@ The advisor itself is built using the Claude Agent SDK and creates a **streaming
 
 1. **Interview Phase** → `ask_interview_question` tool
 2. **Classification Phase** → `classify_agent_type` tool
-3. **Generation Phase** → 3 tools (`generate_agent_code`, `generate_system_prompt`, `generate_config_files`)
-4. **Export Phase** → `generate_implementation_guide` tool
+3. **Documentation Phase** → `generate_planning_document` tool
 
 ### MCP Integration
 
@@ -63,12 +79,12 @@ The advisor uses **MCP (Model Context Protocol)** via `createSdkMcpServer()` to 
 
 ### Output Format: Markdown-Only
 
-**CRITICAL**: The advisor **NEVER** writes files directly. All outputs are formatted as Markdown documents:
+**CRITICAL**: The advisor **NEVER** writes files directly. All documentation outputs are formatted as Markdown:
 
-- **Tool Results**: All generation tools return Markdown with code fences, file headers, and copy instructions
-- **No File Operations**: System prompt explicitly forbids Bash, Write, Edit, or any file operations
-- **User Workflow**: Users receive Markdown output → use `/save <filename>` command → copy code from saved file
-- **Benefits**: Safe, reviewable, portable output that users control when/where to persist
+- **Tool Result**: `generate_planning_document` returns a single Markdown planning document with 8 standardized sections (Overview, Requirements, Architecture, Phases, Security, Metrics, Risk, Deployment).
+- **No File Operations**: System prompt explicitly forbids Bash, Write, Edit, or any file operations.
+- **User Workflow**: Users receive Markdown output → use `/save` command (interactive) → execute the plan manually.
+- **Benefits**: Safe, reviewable, portable output that users control when and where to persist.
 
 ### Session Management & Conversation Context
 
@@ -103,15 +119,29 @@ The advisor uses **MCP (Model Context Protocol)** via `createSdkMcpServer()` to 
 **Streaming Events** (`src/advisor-agent.ts`):
 - `assistant:message` - Agent responses
 - `tool:use` - Tool invocations
-- `thinking` - Extended reasoning blocks (MiniMax-M2)
+- `thinking` - Extended reasoning blocks (MiniMax-M2) with smart truncation
 - `error` - Error handling
+
+**Thinking Block Truncation** (`src/advisor-agent.ts:12-53`):
+- **Smart Truncation Algorithm**: Preserves beginning and end of thinking text
+  - Keeps first 67% and last 33% of allowed length
+  - Example: `"This is a long thinking block message"` → `"This is a long th...king block message"`
+- **Configurable Length**: Set via `MAX_MESSAGE_LENGTH` environment variable
+  - Default: 300 characters
+  - Valid range: 50-1000 characters
+  - Auto-clamping to safe range
+- **Helper Functions**:
+  - `getMaxMessageLength()` - Reads and validates env variable
+  - `truncateMessage(text, maxLength)` - Applies 2:1 smart truncation
+- **Applied to Three Sites**: content_block_start thinking, content_block_delta thinking_delta, final thinking block
 
 **Module Organization**:
 - `src/lib/interview/` - Interactive interview state machine with session management
 - `src/lib/classification/` - Template matching and scoring engine
-- `src/lib/generation/` - Code/prompt/config generators (return Markdown)
-- `src/lib/export/` - Implementation guide generator (returns Markdown)
-- `src/templates/` - 5 agent templates with tool definitions
+- `src/lib/documentation/` - Planning document generator and MCP tool
+- `src/lib/export/` - FileWriter utilities (legacy packaging support)
+- `src/templates/` - 5 agent document templates with comprehensive implementation guidance
+- `src/templates/sections/` - 8 standardized documentation sections (overview, architecture, implementation, testing, deployment, monitoring, troubleshooting, maintenance)
 
 ## Interactive CLI Commands
 
@@ -122,7 +152,7 @@ When running `npm run cli`, the following commands are available:
 /exit, /quit       - Exit the CLI
 /clear             - Clear console screen
 /history           - Show conversation history
-/save <filename>   - Save last advisor output to Markdown file
+/save              - Save last advisor output to Markdown file (interactive)
 /load [name]       - Load saved interview session
 /status            - Show current interview progress
 /templates         - List all available agent templates
@@ -130,10 +160,24 @@ When running `npm run cli`, the following commands are available:
 
 **Query Mode**: Any input that doesn't start with `/` is treated as a query and streamed to the advisor agent.
 
-**Output Capture**: The CLI automatically captures all advisor responses. When code blocks are detected:
+**Output Capture & Interactive Save**: The CLI automatically captures all advisor responses. When code blocks are detected:
 - Visual separator and tip message appears
-- Use `/save my-agent.md` to write output to disk
+- Use `/save` to launch interactive save workflow
 - File saved with full Markdown formatting for easy copy-paste
+
+**Interactive Save Workflow** (`src/cli.ts:617-684`):
+1. **Directory Selection**: Choose from current directory, create new directory, enter custom path, or select from available directories
+2. **Filename Input**: Enter filename or use timestamped default (e.g., `advisor-output-2025-11-02.md`)
+3. **Path Safety Validation**: Detects path traversal, absolute paths, or paths escaping project root
+4. **Overwrite Confirmation**: Prompts before overwriting existing files
+5. **Success Feedback**: Displays saved file path and size
+
+**Helper Methods**:
+- `listDirectories(dirPath)` - Lists non-hidden directories, excludes `node_modules`, `dist`, `build`, `.git`, `sessions`
+- `createNewDirectory(baseDir, name)` - Sanitizes and creates directories (removes invalid chars, clamps length)
+- `selectDirectory()` - Interactive directory selection with numbered menu
+- `prompt(message)` - Generic prompt helper using `pendingConfirmation` pattern
+- `saveWithDirectorySelection()` - Complete interactive save workflow with validation
 
 **Session Management**:
 - `/load` - List all available sessions or load a specific session by ID
@@ -155,7 +199,23 @@ MINIMAX_JWT_TOKEN=your_jwt_token_here  # Required for MiniMax API access
 CLI_PATH=/Users/username/.claude/local/claude  # Optional Claude CLI path
 LOG_LEVEL=info                                  # Logging level (default: info)
 NODE_ENV=development                            # Environment (default: development)
+MAX_MESSAGE_LENGTH=300                          # Thinking block truncation length (default: 300, range: 50-1000)
+CLEAR_SCREEN=true                               # Clear console on CLI startup (default: true, accepts: true/false/1/0/yes/no)
 ```
+
+### CLI Flags
+```bash
+npm run cli                 # Interactive mode with default settings
+npm run cli -- --no-clear   # Interactive mode, preserve terminal history (disable screen clearing)
+npm run cli -- -i           # Explicitly enable interactive mode
+```
+
+**Screen Clearing Behavior**:
+- **Default**: CLI clears screen on startup for clean interactive experience
+- **Environment Variable**: Set `CLEAR_SCREEN=false` to preserve terminal output
+- **CLI Flag Override**: `--no-clear` flag takes precedence over environment variable
+- **TTY Guard**: Clearing only occurs in interactive TTY sessions, never in non-interactive mode
+- **Implementation**: `src/cli.ts:11-29` (helper), `src/cli.ts:553-561` (start method), `src/cli.ts:569-574` (flag parsing)
 
 ### MiniMax Configuration Pattern
 ```typescript
@@ -163,6 +223,7 @@ import { getMinimaxConfig } from './src/utils/minimax-config.js';
 
 const config = getMinimaxConfig();
 // Returns: { baseUrl: 'https://api.minimax.io/anthropic', apiKey: process.env.MINIMAX_JWT_TOKEN }
+// Validation powered by minimaxEnvSchema in src/utils/validation.ts
 ```
 
 ## Project Structure
@@ -171,31 +232,74 @@ const config = getMinimaxConfig();
 src/
 ├── advisor-agent.ts      # Main advisor with MCP server setup
 ├── cli.ts                # Interactive CLI with session management
-├── templates/            # 5 agent templates (data-analyst, content-creator, etc.)
+├── templates/            # 5 agent document templates
 │   ├── index.ts          # Template registry with lookup functions
-│   └── template-types.ts # Shared types and convertToolSchemaToConfig()
+│   ├── template-types.ts # Shared types (AgentTemplate, DocumentTemplate, createDocumentTemplate)
+│   ├── sections/         # Standardized documentation sections
+│   │   └── index.ts      # SECTION_TEMPLATES (8 standardized sections)
+│   ├── data-analyst.ts   # Data Analyst document template
+│   ├── content-creator.ts # Content Creator document template
+│   ├── code-assistant.ts # Code Assistant document template
+│   ├── research-agent.ts # Research Agent document template
+│   └── automation-agent.ts # Automation Agent document template
 ├── lib/
 │   ├── interview/        # State machine, questions, validation, persistence
 │   ├── classification/   # AgentClassifier with scoring algorithm
-│   ├── generation/       # Code/prompt/config generators
-│   └── export/           # FileWriter and AgentPackager
+│   ├── documentation/    # Planning document generator and MCP tool
+│   └── export/           # (legacy utilities, not used in main workflow)
 ├── types/                # Shared TypeScript interfaces
 └── utils/                # minimax-config.ts, validation.ts
 
 tests/
 ├── fixtures/             # Sample requirements and responses
 ├── utils/                # Test helpers and factory functions
+│   ├── test-helpers.ts   # Temp dirs, TypeScript compilation, JSON validation
+│   ├── markdown-validator.ts  # Markdown parsing and validation utilities
+│   └── e2e-helpers.ts    # E2E test wrappers for generators
 ├── unit/                 # Module-level tests
 ├── integration/          # Multi-module workflow tests
 ├── validation/           # TypeScript compilation checks
-└── e2e/                  # Complete workflow tests for all templates
+└── e2e/                  # End-to-end workflow tests
+    ├── advisor-workflow.test.ts
+    ├── conversation-state.test.ts
+    ├── conversation-state-simple.test.ts
+    ├── markdown-output-validation.test.ts
+    └── code-compilation-validation.test.ts
 
 sessions/                 # Interview session persistence (gitignored)
-output/                   # Generated agent projects (gitignored)
 examples/                 # Reference implementations
 ```
 
-## Five Agent Templates
+## E2E Testing Infrastructure
+
+### Markdown Validator (`tests/utils/markdown-validator.ts`)
+
+Comprehensive Markdown parsing and validation utilities:
+
+```typescript
+import {
+  parseMarkdownDocument,      // Parse Markdown into structured components
+  validateMarkdownStructure,  // Validate required elements (headers, code blocks, etc.)
+  extractCodeFromMarkdown,    // Extract code blocks by language
+  extractFileMapping,         // Map file headers to code content
+  validateCodeBlock,          // Validate individual code blocks
+} from '../utils/markdown-validator.js';
+```
+
+**Key Features**:
+- Regex-based parsing for sections, code blocks, file headers
+- Validates file headers: `### File: \`filename\``
+- Validates code fences with language tags: ` ```typescript `
+- Validates copy instructions: `**To use**: Copy...`
+- Returns structured validation results with errors and warnings
+
+### Planning Document Validation
+- `tests/utils/markdown-validator.ts` remains available for parsing Markdown outputs and verifying file headers, code fences, and copy instructions.
+- Use these helpers when adding regression tests for `generate_planning_document`.
+
+## Five Agent Document Templates
+
+**IMPORTANT**: Templates have been transformed from code-generation to **documentation templates**. Each template provides comprehensive implementation guidance across eight standardized sections.
 
 1. **Data Analyst** (`data-analyst`) - CSV processing, statistics, visualization, reporting
 2. **Content Creator** (`content-creator`) - Blog posts, SEO optimization, multi-platform formatting
@@ -203,10 +307,45 @@ examples/                 # Reference implementations
 4. **Research Agent** (`research-agent`) - Web search, content extraction, fact-checking, source verification
 5. **Automation Agent** (`automation-agent`) - Task scheduling, workflow orchestration, queue management
 
-Access via:
+### Document Template Structure
+
+Each document template contains:
+- **8 Standardized Sections**: Overview, Architecture, Implementation, Testing, Deployment, Monitoring, Troubleshooting, Maintenance
+- **Planning Checklist**: Pre-implementation checklist items
+- **Architecture Patterns**: Recommended architectural approaches
+- **Risk Considerations**: Potential risks and mitigation strategies
+- **Success Criteria**: Measurable success indicators
+- **Implementation Guidance**: Step-by-step implementation instructions
+
+### Accessing Templates
+
 ```typescript
-import { ALL_TEMPLATES, getTemplateById, getTemplatesByCapability } from './src/templates';
+// New document template API (recommended)
+import {
+  ALL_DOCUMENT_TEMPLATES,
+  getDocumentTemplateById,
+  getDocumentTemplatesByCapability,
+  getDocumentTemplateSummaries,
+  dataAnalystDocumentTemplate
+} from './src/templates';
+
+// Legacy code template API (deprecated)
+import { ALL_TEMPLATES, getTemplateById } from './src/templates';
 ```
+
+### Template Registry Functions
+
+**Document Templates** (current):
+- `ALL_DOCUMENT_TEMPLATES` - Array of all 5 document templates
+- `getDocumentTemplateById(id)` - Lookup by ID
+- `getDocumentTemplatesByCapability(tag)` - Filter by capability tag
+- `getDocumentTemplateSummaries()` - Returns `{ id, name, description, sectionCount, capabilityTags }[]`
+
+**Code Templates** (deprecated):
+- `ALL_TEMPLATES` - ⚠️ Deprecated, use `ALL_DOCUMENT_TEMPLATES`
+- `getTemplateById(id)` - ⚠️ Deprecated, use `getDocumentTemplateById(id)`
+- `getTemplatesByCapability(tag)` - ⚠️ Deprecated, use `getDocumentTemplatesByCapability(tag)`
+- `getTemplateSummaries()` - ⚠️ Deprecated, use `getDocumentTemplateSummaries()`
 
 ## Implementation Notes
 
@@ -221,11 +360,19 @@ import { ALL_TEMPLATES, getTemplateById, getTemplatesByCapability } from './src/
 - Use Zod for validation, not runtime type checking
 
 ### Tool Output Format
-- **All tool handlers return Markdown**: Generation and export tools format responses as Markdown documents
-- **Code Fences**: Use proper language tags (typescript, json, markdown, bash, env)
-- **File Headers**: Each code block prefixed with `### File: \`filename\``
-- **Copy Instructions**: Each code block followed by `**To use**: Copy the above code to...`
-- **Error Format**: Errors also returned as Markdown with `## Error` heading and troubleshooting sections
+- **Planning document tool returns Markdown**: `generate_planning_document` outputs a Markdown document with file header and copy instructions.
+- **Interview and classification tools return JSON**: `ask_interview_question` and `classify_agent_type` emit structured JSON objects.
+- **Code Fences**: Use proper language tags (`markdown` for planning doc, `json` for errors).
+- **File Headers**: Each Markdown output includes `### File: docs/planning.md`.
+- **Copy Instructions**: Markdown outputs end with `**To use**: Copy the above...`
+- **Error Format**: Errors are returned as Markdown with `## Error` headings and troubleshooting sections.
+
+### Task Management Prohibition
+- **Never use TodoWrite or task management tools**: The advisor outputs documentation only, not executable task lists
+- **TodoWrite, TodoRead, TodoUpdate are prohibited**: These tools create false expectations of execution
+- **Use numbered Markdown lists instead**: Present implementation steps as ordered lists (1., 2., 3.) in Markdown format
+- **User workflow**: Users receive Markdown documentation and implement steps themselves
+- **If tasks fail or are not executable**: Explicitly clear/cancel any presented todos and replace with numbered Markdown next-steps lists
 
 ### Session Persistence & Conversation Context
 - Sessions stored in `sessions/` directory (gitignored)
@@ -241,6 +388,23 @@ import { ALL_TEMPLATES, getTemplateById, getTemplatesByCapability } from './src/
 ### Template Spec Compliance
 **CRITICAL**: All templates must match exact MVP spec schemas in `agent_advisor_mvp-plan.md`. No nested parameter objects - all parameters must be top-level for Claude Agent SDK compatibility.
 
+## Tool Reference
+
+For complete tool documentation including parameter specifications, return formats, error codes, and usage examples, see **[TOOLS.md](./TOOLS.md)**.
+
+### Quick Summary
+
+**3 Tools Available**:
+1. **`ask_interview_question`** - Interactive interview workflow (JSON output)
+2. **`classify_agent_type`** - Template matching and recommendations (JSON output)
+3. **`generate_planning_document`** - Comprehensive planning brief (Markdown output)
+
+**Key Distinction**:
+- Interview & classification tools return **JSON** with structured data
+- Documentation tool returns **Markdown** with a structured planning brief
+
+See [TOOLS.md](./TOOLS.md) for detailed specifications, parameters, return formats, and error handling.
+
 ## Troubleshooting
 
 ### Build Errors
@@ -253,11 +417,14 @@ npm run build
 npx tsc --noEmit
 ```
 
-### Test Failures
-See `TESTING_NOTES.md` for known issues and priority fixes. Current status:
-- **92/112 tests passing** (improved from 74/112)
-- Recent fixes: QUESTIONS export alias, validation type corrections, error message matching
-- Remaining issues: Interview validation edge cases, file system race conditions
+### Test Status
+Current test suite status:
+- **All documentation tests passing**: 184/184 tests (100%)
+  - Unit tests: `tests/unit/documentation/document-generator.test.ts` (78 tests)
+  - Unit tests: `tests/unit/documentation/planning-tool.test.ts` (45 tests)
+  - E2E tests: `tests/e2e/document-generation.test.ts` (61 tests)
+- See `TESTING_NOTES.md` for any remaining issues in other test suites
+- Recent additions: Comprehensive documentation generator test coverage with code block absence verification, section ordering validation, and edge case handling
 
 ### MiniMax Connection Issues
 ```bash
@@ -268,12 +435,6 @@ echo $MINIMAX_JWT_TOKEN
 npm run cli
 > "Hello, can you help me build an agent?"
 ```
-
-### Generated Code Won't Compile
-- Check that generated code uses `.js` imports
-- Verify all Zod schemas are properly defined
-- Run `npx tsc` in generated project directory
-- See `examples/` for working reference implementations
 
 ## Git Workflow
 
@@ -347,12 +508,82 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 - Interview module (15 questions, 4 stages, state management, persistence)
 - 5 agent templates with complete tool definitions
 - Classification module with scoring engine
-- Generation module (code, prompts, config files)
+- Documentation module (planning brief generator)
 - Main advisor agent with streaming MCP architecture
 - Interactive CLI with session management
 
 ✅ **Recent Updates**:
-- **Test Suite Improvements** (Latest - 2025-11-02):
+- **Documentation Generator Test Coverage** (2025-11-02):
+  - Added comprehensive test suite for `PlanningDocumentGenerator` class (78 unit tests)
+  - Added test coverage for `generate_planning_document` MCP tool handler (45 unit tests)
+  - Added E2E workflow tests covering full Requirements → Classification → Documentation pipeline (61 tests)
+  - **Test Coverage Areas**:
+    - All 5 templates validated (Data Analyst, Content Creator, Code Assistant, Research Agent, Automation Agent)
+    - Verification of all 8 required sections (Overview, Requirements, Architecture, Phases, Security, Metrics, Risk, Deployment)
+    - Heading hierarchy validation (H1 title, H2 sections)
+    - Code block absence verification (ensures documentation-only output)
+    - Section ordering and content substantiveness checks
+    - Edge cases: empty implementation steps, no MCP servers, minimal requirements, complex capabilities
+    - Error handling and Markdown formatting validation
+    - Integration validation between classifier and generator
+  - **Files Created**:
+    - `tests/unit/documentation/document-generator.test.ts`
+    - `tests/unit/documentation/planning-tool.test.ts`
+    - `tests/e2e/document-generation.test.ts`
+  - **Legacy Template Compatibility**: Added backward-compatible `AgentTemplate` exports to all 5 template files
+  - **Test Results**: 184/184 tests passing (100%)
+  - **Benefits**: Ensures planning documents are consistently structured, validates documentation-first workflow, prevents code generation drift
+- **Documentation-First Workflow Transition** (2025-11-03):
+  - Retired code/config generation and export tools in favor of a single planning deliverable.
+  - Introduced `PlanningDocumentGenerator` and the `generate_planning_document` MCP tool.
+  - Updated advisor system prompt, CLI fallback pipeline, and classification guidance to reference the documentation phase.
+  - Streamlined module layout (`src/lib/documentation/`) and removed obsolete generation/export artifacts.
+  - **Benefits**: Eliminates code scaffolding drift, keeps advisor focused on strategic planning, simplifies toolset to three core actions.
+- **Console Screen Clearing Control** (2025-11-02):
+  - Added `CLEAR_SCREEN` environment variable for controlling CLI startup behavior
+  - Implemented `--no-clear` CLI flag for runtime override
+  - Added `shouldClearScreen()` helper function (`src/cli.ts:11-29`)
+  - Updated `AdvisorCLI` constructor to accept optional `clearScreen` parameter
+  - TTY guard ensures clearing only occurs in interactive sessions
+  - Flag precedence: `--no-clear` > `CLEAR_SCREEN` env variable > default (true)
+  - Accepts flexible values: true/false, 1/0, yes/no (case-insensitive)
+  - Updated `.env.example` with comprehensive documentation and examples
+  - **Benefits**: Users can preserve terminal history when needed, safe TTY-only behavior
+- **TodoWrite Prohibition Enhancement** (2025-11-02):
+  - Added TodoWrite, TodoRead, TodoUpdate to PROHIBITED TOOLS in system prompt
+  - New "Task Management and Workflow" subsection in Best Practices
+  - Enhanced "Provide Complete Solutions" guideline to forbid TodoWrite
+  - Added guidance to clear todos when tasks fail or cannot be executed
+  - Documentation updates in CLAUDE.md and agents.md
+  - **Rationale**: Task management tools are incompatible with Markdown-only output philosophy and create false expectations that the advisor will execute tasks rather than provide documentation
+  - **Benefits**: Clearer advisor behavior, prevents confusion, reinforces documentation-first approach
+- **Comprehensive Tool Documentation** (2025-11-02):
+  - **System Prompt Corrections** (`src/advisor-agent.ts`):
+    - Fixed `ask_interview_question` tool: Actions (`start`, `answer`, `skip`, `resume`, `status`), removed invalid actions (`ask`, `complete`)
+    - Fixed `classify_agent_type` tool: Added `includeAlternatives` parameter, clarified JSON return format
+    - Updated parameter descriptions to match actual tool handler implementations
+  - **New Tool Reference Quick Guide** (CLAUDE.md, agents.md):
+    - Comprehensive reference section for the three supported tools (interview, classification, documentation)
+    - Detailed parameter descriptions with types and requirements
+    - Return format specifications with structure details
+    - Implementation file paths for easy code navigation
+    - Clear distinction between JSON (interview/classification) and Markdown (documentation) outputs
+  - **Enhanced Available Tools Summary Table** (agents.md):
+    - Updated input column with complete parameter lists
+    - Clarified output format with structure details for JSON tools
+    - More descriptive and accurate tool specifications
+  - **Benefits**:
+    - Prevents tool hallucination through accurate documentation
+    - Improves developer onboarding with centralized tool reference
+    - Ensures advisor agent and developers use correct parameters
+    - Provides quick lookup for tool usage patterns
+- **Thinking Block Truncation Enhancement** (2025-11-02):
+  - Implemented smart truncation algorithm with 2:1 split (first 67%, last 33%)
+  - Configurable via `MAX_MESSAGE_LENGTH` env variable (default 300, range 50-1000)
+  - Centralized helper functions: `getMaxMessageLength()` and `truncateMessage()`
+  - Applied to all three thinking block streaming sites in advisor-agent.ts
+  - Updated .env.example with comprehensive documentation and examples
+- **Test Suite Improvements** (2025-11-02):
   - **Export Test Refactoring**: Eliminated redundant retry loops, DRY violations, and fixed sleeps
     - Removed outer retry loops in `afterEach` cleanup (test helpers already have retry logic)
     - Centralized file-existence checks using shared `waitForFileExists()` helper
@@ -371,16 +602,28 @@ Co-Authored-By: Claude <noreply@anthropic.com>
   - CLI automatically resumes most recent session on startup
   - `/load` command enhanced to restore full conversation context
   - Backward compatible with legacy sessions (optional metadata fields)
-- **Markdown-Only Output**: All generation tools now return formatted Markdown instead of JSON
-- **CLI Output Capture**: Automatic capture with `/save <filename>` command for easy persistence
+- **Markdown-Only Output**: Planning deliverables ship as Markdown only; no automated code or config generation remains.
+- **Interactive Save Workflow** (2025-11-02):
+  - Replaced command-line argument `/save <filename>` with fully interactive `/save` workflow
+  - Added directory selection menu with create/custom path options
+  - Implemented directory listing with filtering (excludes hidden, node_modules, dist, build, .git, sessions)
+  - Added directory name sanitization (spaces to hyphens, invalid char removal, length clamping)
+  - Timestamped default filenames (e.g., `advisor-output-2025-11-02.md`)
+  - Path safety validation preserved from legacy implementation
+  - Interactive prompts for all user inputs using `pendingConfirmation` pattern
+  - **Helper Methods**: `listDirectories()`, `createNewDirectory()`, `selectDirectory()`, `prompt()`, `saveWithDirectorySelection()`
+  - **Benefits**: Better UX, organized output structure, prevents accidental overwrites, safer path handling
+- **CLI Output Capture**: Automatic capture with `/save` command (interactive) for easy persistence
 - **No File Operations**: Advisor never writes files directly, only outputs Markdown
 - **Enhanced UX**: Code fence detection with helpful copy tips
 
-🟡 **Known Issues** (see TESTING_NOTES.md):
-- 7/112 test failures remaining (down from 20/112, originally 38/112)
-- Remaining issues: Interview validator edge cases (2 tests), state-manager timestamp handling (5 tests)
-- Export tests fully stabilized: All 20 file-writer and packager tests passing
-- Pipeline tests use generator classes directly (not affected by tool handler changes)
+✅ **Test Suite Status**:
+- **Documentation module**: 184/184 tests passing (100%)
+  - Unit tests for `PlanningDocumentGenerator`: 78/78 passing
+  - Unit tests for planning tool handler: 45/45 passing
+  - E2E documentation workflow tests: 61/61 passing
+- **Other modules**: See TESTING_NOTES.md for any remaining issues in interview/classification modules
+- **Legacy export suite**: Retired in favor of documentation-first workflow
 
 ## Development Philosophy
 

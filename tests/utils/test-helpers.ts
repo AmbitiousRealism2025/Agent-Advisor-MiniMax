@@ -111,7 +111,6 @@ export function createMockAgentRecommendations(
       { name: 'filesystem', description: 'File system access', url: 'mcp://filesystem', authentication: 'none' as const }
     ] : [],
     systemPrompt: `You are ${requirements.name}, designed to ${requirements.primaryOutcome}.`,
-    starterCode: '',
     toolConfigurations: [],
     estimatedComplexity: 'medium' as const,
     implementationSteps: [
@@ -131,7 +130,8 @@ export function createMockAgentRecommendations(
  * @returns Promise resolving to the absolute path of the temp directory
  */
 export async function createTempDirectory(prefix: string = 'test'): Promise<string> {
-  const tempDir = path.join(__dirname, '../../test-temp', `${prefix}-${Date.now()}`);
+  const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const tempDir = path.join(__dirname, '../../test-temp', `${prefix}-${uniqueSuffix}`);
   await fs.mkdir(tempDir, { recursive: true });
   // Verify directory is fully created and accessible
   await fs.access(tempDir);

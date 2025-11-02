@@ -49,7 +49,6 @@ export class AgentClassifier {
       requiredDependencies: template.requiredDependencies,
       mcpServers,
       systemPrompt,
-      starterCode: this.generateStarterCode(template, requirements),
       toolConfigurations: template.defaultTools,
       estimatedComplexity: complexity,
       implementationSteps,
@@ -74,17 +73,22 @@ export class AgentClassifier {
    * @returns Template score with reasoning
    */
   scoreTemplate(template: AgentTemplate, requirements: AgentRequirements): TemplateScore {
-    let score = 0;
+    let rawScore = 0;
     const matchedCapabilities: string[] = [];
     const missingCapabilities: string[] = [];
     const reasons: string[] = [];
 
+    const capabilityMatchWeight = 10;
+    const useCaseMax = 30;
+    const interactionMax = 15;
+
     // Score capability matches (10 points per match)
     const requiredCapabilities = this.extractRequiredCapabilities(requirements);
+    const capabilityMatchMax = requiredCapabilities.length * capabilityMatchWeight;
     requiredCapabilities.forEach(cap => {
       if (template.capabilityTags.includes(cap)) {
         matchedCapabilities.push(cap);
-        score += 10;
+        rawScore += capabilityMatchWeight;
       } else {
         missingCapabilities.push(cap);
       }
@@ -97,29 +101,35 @@ export class AgentClassifier {
       useCase.toLowerCase().includes(primaryOutcomeLower)
     );
     if (matchingUseCases.length > 0) {
-      score += 15 * Math.min(matchingUseCases.length, 2);
+      const useCaseScore = 15 * Math.min(matchingUseCases.length, 2);
+      rawScore += useCaseScore;
       reasons.push(`Matches use cases: ${matchingUseCases.join(', ')}`);
     }
 
     // Score interaction style alignment (15 points max)
     if (this.matchesInteractionStyle(template, requirements.interactionStyle)) {
-      score += 15;
+      rawScore += interactionMax;
       reasons.push(`Compatible with ${requirements.interactionStyle} interaction style`);
     }
 
     // Score capability requirements (7 points per requirement)
     const capabilityScore = this.scoreCapabilityRequirements(template, requirements.capabilities);
-    score += capabilityScore.score;
+    rawScore += capabilityScore.score;
     if (capabilityScore.reasons.length > 0) {
       reasons.push(...capabilityScore.reasons);
     }
+
+    const totalPossibleScore = capabilityMatchMax + useCaseMax + interactionMax + capabilityScore.maxScore;
+    const normalizedScore = totalPossibleScore > 0
+      ? Number(((rawScore / totalPossibleScore) * 100).toFixed(2))
+      : 0;
 
     // Generate reasoning summary
     const reasoning = this.buildReasoningSummary(template, matchedCapabilities, missingCapabilities, reasons);
 
     return {
       templateId: template.id,
-      score,
+      score: normalizedScore,
       matchedCapabilities,
       missingCapabilities,
       reasoning
@@ -137,7 +147,7 @@ export class AgentClassifier {
       servers.push({
         name: 'web-fetch',
         description: 'Web content fetching and scraping capabilities',
-        url: 'https://github.com/anthropics/mcp-server-fetch',
+        url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/fetch',
         authentication: 'none'
       });
     }
@@ -147,17 +157,17 @@ export class AgentClassifier {
       servers.push({
         name: 'filesystem',
         description: 'Local filesystem read/write operations',
-        url: 'https://github.com/anthropics/mcp-server-filesystem',
+        url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem',
         authentication: 'none'
       });
     }
 
-    // Data analysis specific
+    // Data analysis specific (reference example - update with specific server when available)
     if (requirements.capabilities.dataAnalysis) {
       servers.push({
         name: 'data-tools',
-        description: 'Statistical analysis and data processing utilities',
-        url: 'https://github.com/anthropics/mcp-server-everything',
+        description: 'Statistical analysis and data processing utilities (reference example)',
+        url: 'https://github.com/modelcontextprotocol/servers',
         authentication: 'none'
       });
     }
@@ -167,7 +177,7 @@ export class AgentClassifier {
       servers.push({
         name: 'memory',
         description: 'Persistent memory and context management',
-        url: 'https://github.com/anthropics/mcp-server-memory',
+        url: 'https://github.com/modelcontextprotocol/servers/tree/main/src/memory',
         authentication: 'none'
       });
     }
@@ -300,29 +310,6 @@ export class AgentClassifier {
     return steps;
   }
 
-  /**
-   * Generate starter code reference
-   */
-  private generateStarterCode(template: AgentTemplate, requirements: AgentRequirements): string {
-    return `// ${requirements.name} - Generated from ${template.name} template
-// See full implementation in generated project files
-
-import { Agent } from '@anthropic-ai/claude-agent-sdk';
-import { getMinimaxConfig } from './config.js';
-${template.defaultTools.length > 0 ? `import { ${template.defaultTools.map(t => `${t.name}Tool`).join(', ')} } from './tools.js';\n` : ''}
-const config = getMinimaxConfig();
-
-const agent = new Agent({
-  model: config.model,
-  apiKey: config.apiKey,
-  baseUrl: config.baseUrl,
-  systemPrompt: \`${template.systemPrompt.substring(0, 200)}...\`,
-  tools: [${template.defaultTools.map(t => `${t.name}Tool`).join(', ')}]
-});
-
-// Start agent and handle interactions
-await agent.run();`;
-  }
 
   /**
    * Generate notes about classification results
@@ -331,7 +318,7 @@ await agent.run();`;
     const notes: string[] = [];
 
     // Clamp confidence display to 0-100 range
-    const confidence = Math.min(100, Math.max(0, bestMatch.score));
+    const confidence = bestMatch.score;
     notes.push(`Selected ${bestMatch.templateId} template with ${confidence.toFixed(0)}% confidence.`);
 
     if (bestMatch.missingCapabilities.length > 0) {
@@ -339,8 +326,7 @@ await agent.run();`;
     }
 
     if (alternatives.length > 0 && alternatives[0].score > 50) {
-      // Clamp alternative scores as well
-      notes.push(`Alternative options: ${alternatives.map(a => `${a.templateId} (${Math.min(100, Math.max(0, a.score)).toFixed(0)}%)`).join(', ')}`);
+      notes.push(`Alternative options: ${alternatives.map(a => `${a.templateId} (${a.score.toFixed(0)}%)`).join(', ')}`);
     }
 
     if (requirements.additionalNotes) {
@@ -410,9 +396,18 @@ await agent.run();`;
   /**
    * Score capability requirements alignment
    */
-  private scoreCapabilityRequirements(template: AgentTemplate, capabilities: AgentRequirements['capabilities']): { score: number; reasons: string[] } {
+  private scoreCapabilityRequirements(
+    template: AgentTemplate,
+    capabilities: AgentRequirements['capabilities']
+  ): { score: number; maxScore: number; reasons: string[] } {
     let score = 0;
     const reasons: string[] = [];
+    const weightPerCapability = 7;
+
+    const capabilityRequirementKeys: Array<keyof AgentRequirements['capabilities']> = ['fileAccess', 'webAccess', 'dataAnalysis'];
+    const maxScore = capabilityRequirementKeys.reduce((total, key) => {
+      return capabilities[key] ? total + weightPerCapability : total;
+    }, 0);
 
     // Check if template supports required capabilities (7 points per match)
     const supportsFileAccess = template.capabilityTags.includes('file-access');
@@ -420,19 +415,19 @@ await agent.run();`;
     const supportsDataAnalysis = template.capabilityTags.includes('data-processing');
 
     if (capabilities.fileAccess && supportsFileAccess) {
-      score += 7;
+      score += weightPerCapability;
       reasons.push('Supports file access');
     }
     if (capabilities.webAccess && supportsWebAccess) {
-      score += 7;
+      score += weightPerCapability;
       reasons.push('Supports web access');
     }
     if (capabilities.dataAnalysis && supportsDataAnalysis) {
-      score += 7;
+      score += weightPerCapability;
       reasons.push('Supports data analysis');
     }
 
-    return { score, reasons };
+    return { score, maxScore, reasons };
   }
 
   /**

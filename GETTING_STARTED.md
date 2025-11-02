@@ -35,9 +35,14 @@ code .env
 
 **Add the following to your `.env` file:**
 ```bash
+# Required
 MINIMAX_JWT_TOKEN=your_actual_jwt_token_here
+
+# Optional
 LOG_LEVEL=info
 NODE_ENV=development
+MAX_MESSAGE_LENGTH=300      # Thinking block truncation (default: 300, range: 50-1000)
+CLEAR_SCREEN=true           # Clear console on CLI startup (default: true)
 ```
 
 **Verify your setup:**
@@ -57,7 +62,13 @@ Start the interactive command-line interface:
 
 ```bash
 npm run cli
+
+# Preserve terminal history (don't clear screen)
+npm run cli -- --no-clear
 ```
+
+**CLI Options:**
+- `--no-clear` — Disable console clearing on startup (preserves terminal history)
 
 **Available Commands:**
 - `/help` - Show available commands

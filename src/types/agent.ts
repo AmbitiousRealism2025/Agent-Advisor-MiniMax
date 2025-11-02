@@ -49,8 +49,7 @@ export interface AgentRecommendations {
   agentType: string;
   requiredDependencies: string[];
   mcpServers: MCPServerConfiguration[];
-  systemPrompt: string;
-  starterCode: string;
+  systemPrompt?: string;
   toolConfigurations: ToolConfiguration[];
   estimatedComplexity: 'low' | 'medium' | 'high';
   implementationSteps: string[];

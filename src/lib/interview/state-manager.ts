@@ -74,6 +74,16 @@ export class InterviewStateManager {
     }
   }
 
+  skipCurrentQuestion(): void {
+    // Only increment the question index without updating requirements or recording response
+    this.state.currentQuestionIndex++;
+
+    const currentStageQuestions = this.getQuestionsForStage(this.state.currentStage);
+    if (this.state.currentQuestionIndex >= currentStageQuestions.length) {
+      this.advanceStage();
+    }
+  }
+
   advanceStage(): boolean {
     const stages: InterviewStage[] = ['discovery', 'requirements', 'architecture', 'output', 'complete'];
     const currentIndex = stages.indexOf(this.state.currentStage);

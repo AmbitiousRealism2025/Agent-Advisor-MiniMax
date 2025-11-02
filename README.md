@@ -1,7 +1,7 @@
 # Agent Advisor MVP - MiniMax Edition
 
 **Project Status**: ✅ Phase 5 Complete — MVP Functional & Deployed to GitHub
-**Purpose**: AI agent that guides developers through creating custom Claude Agent SDK projects integrated with MiniMax API
+**Purpose**: AI-powered advisor that creates comprehensive planning documents for agent implementation
 **Repository**: [github.com/AmbitiousRealism2025/Agent-Advisor-MiniMax](https://github.com/AmbitiousRealism2025/Agent-Advisor-MiniMax)
 
 ---
@@ -59,7 +59,7 @@ Reference the validated patterns from:
 ### Step 4: Begin Implementation
 
 Follow the development timeline in `agent_advisor_mvp-plan.md`:
-- Week 1: Core implementation (interview, templates, generation)
+- Week 1: Core implementation (interview, templates, documentation)
 - Week 2: Polish, testing, deployment
 
 ---
@@ -69,7 +69,7 @@ Follow the development timeline in `agent_advisor_mvp-plan.md`:
 ### Key Files to Create
 - `src/advisor-agent.ts` - Main advisor agent
 - `src/templates/` - 5 agent templates
-- `src/lib/` - Interview, classification, generation logic
+- `src/lib/` - Interview, classification, documentation logic
 - `tests/` - Comprehensive test suite
 
 ### Core Dependencies
@@ -96,10 +96,10 @@ const config = {
 Build a CLI tool that:
 1. Conducts interactive interview to understand developer needs
 2. Classifies requirements into appropriate agent types
-3. Generates complete, working agent implementations
-4. Exports code, configs, and implementation guides
+3. Generates comprehensive planning documents for implementation
+4. Provides structured guidance for handoff
 
-**Success Criteria**: From concept to working agent in <10 minutes
+**Success Criteria**: From concept to actionable implementation plan in <10 minutes
 
 ---
 
@@ -127,10 +127,45 @@ npm run build
 
 ## Installation
 
-Run the standard Node.js installation command after cloning the repository:
+### Local Development
+
+Clone the repository and install dependencies:
 
 ```bash
+git clone https://github.com/AmbitiousRealism2025/Agent-Advisor-MiniMax.git
+cd agent_advisor-minimax-mvp
 npm install
+npm run build
+```
+
+### Global Installation
+
+Install globally to use the `agent-advisor` command anywhere:
+
+```bash
+npm install -g agent-advisor-mvp
+```
+
+After global installation, you can run:
+```bash
+agent-advisor
+```
+
+### Using npx (No Installation Required)
+
+Run directly without installing:
+
+```bash
+npx agent-advisor-mvp
+```
+
+### Local Package Usage
+
+After installing locally in a project:
+
+```bash
+npm install agent-advisor-mvp
+npx agent-advisor
 ```
 
 ## Project Structure
@@ -144,8 +179,8 @@ agent_advisor-minimax-mvp/
 │   ├── lib/
 │   │   ├── interview/
 │   │   ├── classification/
-│   │   ├── generation/
-│   │   └── export/
+│   │   ├── documentation/
+│   │   └── export/         # (legacy utilities, not main workflow)
 │   ├── types/
 │   └── utils/
 ├── tests/
@@ -159,55 +194,55 @@ Five production-ready agent templates are now available:
 ### 1. **Data Analyst Agent** (`data-analyst`)
 Specializes in CSV data processing, statistical analysis, and report generation.
 
-**Tools:**
-- `read_csv` - Parse CSV files with configurable options
-- `analyze_data` - Perform descriptive, correlation, and regression analysis
-- `generate_visualization` - Create charts (bar, line, scatter, pie, histogram, heatmap)
-- `export_report` - Generate reports in PDF, HTML, Markdown, or JSON formats
+**Implementation Guidance:**
+- CSV parsing and validation architecture
+- Statistical analysis module design
+- Visualization pipeline configuration
+- Report generation and export strategies
 
 **Ideal for:** Automated data analysis, business intelligence, data quality assessment
 
 ### 2. **Content Creator Agent** (`content-creator`)
 Specializes in blog posts, documentation, marketing copy, and SEO optimization.
 
-**Tools:**
-- `generate_outline` - Create structured content outlines
-- `write_section` - Write content sections with specified tone and style
-- `optimize_for_seo` - Optimize content for search engines
-- `format_content` - Format for various platforms (WordPress, Medium, GitHub, LinkedIn)
+**Implementation Guidance:**
+- Content outline generation architecture
+- Multi-tone writing module design
+- SEO optimization pipeline
+- Multi-platform formatting strategies
 
 **Ideal for:** Content marketing, technical writing, automated content generation
 
 ### 3. **Code Assistant Agent** (`code-assistant`)
 Specializes in code review, debugging, refactoring, and test generation.
 
-**Tools:**
-- `analyze_code` - Analyze for quality, security, performance, and complexity
-- `suggest_improvements` - Provide actionable code improvement suggestions
-- `generate_tests` - Generate unit tests with edge cases and mocks
-- `refactor_code` - Refactor while maintaining functionality
+**Implementation Guidance:**
+- Static code analysis architecture
+- Improvement suggestion engine design
+- Test generation pipeline
+- Refactoring workflow strategies
 
 **Ideal for:** Code quality improvement, technical debt reduction, developer productivity
 
 ### 4. **Research Agent** (`research-agent`)
 Specializes in web search, content extraction, fact-checking, and source verification.
 
-**Tools:**
-- `web_search` - Search the web with advanced filtering
-- `scrape_content` - Extract and parse web page content
-- `extract_facts` - Extract key facts, statistics, and data points
-- `verify_sources` - Verify source credibility and accuracy
+**Implementation Guidance:**
+- Web search integration architecture
+- Content extraction and parsing strategies
+- Fact extraction pipeline design
+- Source verification and credibility assessment
 
 **Ideal for:** Market research, competitive analysis, fact-checking, information gathering
 
 ### 5. **Automation Agent** (`automation-agent`)
 Specializes in task orchestration, workflow automation, and scheduled execution.
 
-**Tools:**
-- `schedule_task` - Schedule tasks with cron-like syntax
-- `execute_workflow` - Execute multi-step workflows with conditional logic
-- `monitor_status` - Monitor task and workflow execution status
-- `manage_queue` - Manage task queues with priority and rate limiting
+**Implementation Guidance:**
+- Task scheduling system architecture
+- Multi-step workflow execution design
+- Status monitoring pipeline
+- Queue management and prioritization strategies
 
 **Ideal for:** Process automation, batch processing, DevOps automation, system integration
 
@@ -215,22 +250,27 @@ Specializes in task orchestration, workflow automation, and scheduled execution.
 
 ```typescript
 import {
-  ALL_TEMPLATES,
-  getTemplateById,
-  getTemplatesByCapability,
-  dataAnalystTemplate,
+  ALL_DOCUMENT_TEMPLATES,
+  getDocumentTemplateById,
+  getDocumentTemplatesByCapability,
+  dataAnalystDocumentTemplate,
 } from './src/templates';
 
-// Access all templates
-console.log(`${ALL_TEMPLATES.length} templates available`);
+// Access all document templates
+console.log(`${ALL_DOCUMENT_TEMPLATES.length} templates available`);
 
 // Get template by ID
-const template = getTemplateById('data-analyst');
+const template = getDocumentTemplateById('data-analyst');
 console.log(template.name); // "Data Analyst Agent"
-console.log(template.defaultTools.length); // 4 tools
+console.log(Object.keys(template.documentSections).length); // 8 sections
+
+// Access implementation guidance
+console.log(template.planningChecklist);
+console.log(template.successCriteria);
+console.log(template.documentSections.implementation);
 
 // Find templates by capability
-const dataTemplates = getTemplatesByCapability('data-processing');
+const dataTemplates = getDocumentTemplatesByCapability('data-processing');
 ```
 
 ## Development
@@ -240,8 +280,57 @@ const dataTemplates = getTemplatesByCapability('data-processing');
 - `npm run test` — Execute the Vitest suite.
 - `npm start` — Run the compiled advisor agent from `dist/`.
 - `npm run cli` — Start the interactive CLI.
+- `npm run cli -- --no-clear` — Start CLI without clearing screen (preserves terminal history).
 - `npm run cli:interactive` — Start the interactive CLI (explicit).
 - `npm run advisor` — Run the advisor agent directly.
+
+## Environment Configuration
+
+### Required Variables
+
+```bash
+MINIMAX_JWT_TOKEN=your_jwt_token_here  # Required for MiniMax API access
+```
+
+### Optional Variables
+
+```bash
+# Thinking block truncation length (default: 300, range: 50-1000)
+MAX_MESSAGE_LENGTH=300
+
+# CLI console clearing on startup (default: true, accepts: true/false/1/0/yes/no)
+CLEAR_SCREEN=true
+
+# Logging and environment
+LOG_LEVEL=info                    # Logging level (default: info)
+NODE_ENV=development              # Environment (default: development)
+CLI_PATH=/path/to/claude          # Optional Claude CLI path
+```
+
+### Console Clearing Behavior
+
+The CLI clears the console on startup by default for a clean interactive experience. You can control this behavior:
+
+**Precedence order** (highest to lowest):
+1. `--no-clear` CLI flag — Runtime override
+2. `CLEAR_SCREEN` environment variable — Session preference
+3. Default behavior — Clear screen (true)
+
+**Examples:**
+```bash
+# Preserve terminal history with flag (highest precedence)
+npm run cli -- --no-clear
+
+# Disable via environment variable
+CLEAR_SCREEN=false npm run cli
+
+# Use default behavior (clear screen)
+npm run cli
+```
+
+**Note**: Clearing only occurs in interactive TTY sessions; non-interactive mode is unaffected.
+
+For complete environment variable documentation with examples, see `.env.example`.
 
 ## Usage Examples
 
@@ -253,7 +342,7 @@ This guide includes:
 - Template-specific examples for each of the 5 agent types
 - Complete CLI commands reference
 - Programmatic usage with the Pipeline API
-- Customization guide for extending generated agents
+- Customization guide for adapting planning documents for implementation
 - Best practices for deployment and production use
 
 ## Testing
@@ -262,10 +351,10 @@ The Agent Advisor MVP has comprehensive test coverage (90%+ on core logic) to en
 
 ### Test Coverage
 
-- **Unit Tests**: Individual module testing (interview, classification, generation)
+- **Unit Tests**: Individual module testing (interview, classification, documentation)
 - **Integration Tests**: Module interaction testing (interview flow, pipeline)
 - **End-to-End Tests**: Complete workflow testing for all 5 templates
-- **Validation Tests**: TypeScript compilation verification for generated code
+- **Validation Tests**: Markdown structure validation for planning documents
 
 ### Running Tests
 
@@ -297,20 +386,21 @@ tests/
 │   ├── sample-requirements.ts  # Agent requirements for each template
 │   └── sample-responses.ts     # Interview response sets
 ├── utils/                 # Test helpers
-│   └── test-helpers.ts    # Factory functions and validators
+│   ├── test-helpers.ts    # Factory functions and validators
+│   ├── markdown-validator.ts  # Markdown parsing and validation
+│   └── e2e-helpers.ts     # E2E test wrappers
 ├── unit/                  # Unit tests
 │   ├── interview/         # Interview module tests
 │   ├── classification/    # Classifier tests
-│   ├── generation/        # Code/prompt/config generator tests
-│   └── export/            # File writer and packager tests
+│   └── documentation/     # Planning document generator tests
 ├── integration/           # Integration tests
 │   ├── interview-flow.test.ts  # Complete interview flow
 │   └── pipeline.test.ts        # Full pipeline integration
 ├── validation/            # Validation tests
-│   └── typescript-compilation.test.ts  # Code compilation checks
+│   └── markdown-structure.test.ts  # Markdown structure validation
 └── e2e/                   # End-to-end tests
-    ├── all-templates.test.ts        # All 5 templates
-    └── template-data-analyst.test.ts # Template-specific tests
+    ├── document-generation.test.ts  # Documentation workflow E2E
+    └── advisor-workflow.test.ts     # Complete advisor workflow
 ```
 
 ### Coverage Report
@@ -324,18 +414,22 @@ open coverage/index.html
 
 ### Quality Assurance
 
-- **Code Quality**: All generated code passes TypeScript strict mode compilation
+- **Documentation Quality**: All planning documents validated for structure and completeness
 - **Template Coverage**: All 5 templates tested end-to-end with sample requirements
 - **Error Handling**: Comprehensive error handling tested with invalid inputs
-- **File Operations**: File I/O operations tested with temporary directories
-- **90%+ Coverage**: Core logic (interview, classification, generation) exceeds 90% coverage
+- **Markdown Validation**: Planning document structure and formatting validated
+- **90%+ Coverage**: Core logic (interview, classification, documentation) exceeds 90% coverage
 
 ## Implementation Status
 
 All phases complete — **Production Ready**:
 - ✅ **Phase 1**: Interview module with 15 questions, state management, validation, and persistence
-- ✅ **Phase 2**: Five production-ready agent templates with complete tool definitions
+- ✅ **Phase 2**: Five production-ready agent templates with comprehensive implementation guidance
 - ✅ **Phase 3**: Classification module with template scoring and recommendations
-- ✅ **Phase 4**: Generation module for code, prompts, and configuration files
-- ✅ **Phase 5**: Export subsystem, main advisor agent, CLI, and pipeline orchestration
+- ✅ **Phase 4**: Documentation module for planning document generation
+- ✅ **Phase 5**: Main advisor agent with 3-tool workflow, CLI, and session management
 - ✅ **Phase 6**: Comprehensive testing suite with 90%+ coverage
+
+### System Transformation (November 2025)
+
+**Documentation-First Workflow**: The system has been transformed from code generation to planning document creation. Instead of generating code, the advisor now produces comprehensive Markdown planning documents with 8 standardized sections (Overview, Requirements, Architecture, Phases, Security, Metrics, Risk, Deployment). Users receive actionable implementation guidance that they execute offline, maintaining full control over the development process.

@@ -1,12 +1,72 @@
 #!/usr/bin/env node
 
+// Load environment variables first (must be before other imports that use process.env)
+import 'dotenv/config';
+
 import * as readline from 'readline';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { createRequire } from 'node:module';
 import { runAdvisor } from './advisor-agent.js';
 import { InterviewStateManager } from './lib/interview/state-manager.js';
 import { AgentGenerationPipeline } from './pipeline.js';
 import { listSessions, loadSession as loadPersistedSession, saveSession } from './lib/interview/persistence.js';
+import { applyMinimaxEnvironment, getMinimaxConfig } from './utils/minimax-config.js';
+
+const require = createRequire(import.meta.url);
+
+const CLI_VERSION = (() => {
+  try {
+    const pkg = require('../../package.json') as { version?: string };
+    return typeof pkg?.version === 'string' ? pkg.version : 'dev';
+  } catch {
+    return 'dev';
+  }
+})();
+
+/**
+ * Parse CLEAR_SCREEN environment variable
+ * Accepts: true/false, 1/0, yes/no (case-insensitive)
+ * Defaults to true
+ */
+function shouldClearScreen(): boolean {
+  const value = process.env.CLEAR_SCREEN?.toLowerCase().trim();
+
+  if (!value) {
+    return true; // Default to true
+  }
+
+  // Accept true/false, 1/0, yes/no
+  if (value === 'false' || value === '0' || value === 'no') {
+    return false;
+  }
+
+  return true; // Default to true for any other value
+}
+
+let minimaxEnvironmentConfigured = false;
+
+/**
+ * Ensure the Claude SDK environment variables are populated exactly once per process.
+ * The SDK reads `ANTHROPIC_*` values from `process.env`, so we map the validated
+ * MiniMax configuration to those keys ahead of the first query.
+ */
+function ensureMinimaxEnvironment(): void {
+  if (minimaxEnvironmentConfigured) {
+    return;
+  }
+
+  try {
+    const config = getMinimaxConfig();
+    applyMinimaxEnvironment(config);
+    minimaxEnvironmentConfigured = true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown MiniMax configuration error.';
+    console.error('❌ MiniMax configuration error:');
+    console.error(`   • ${message}`);
+    process.exit(1);
+  }
+}
 
 /**
  * Interactive CLI for the Agent Advisor
@@ -21,8 +81,12 @@ export class AdvisorCLI {
   private currentAdvisorSessionId: string | null = null;
   private conversationMessageCount: number = 0;
   private conversationStartTime: Date | null = null;
+  private clearScreen: boolean;
+  private isBusy = false;
+  private pendingConfirmation: ((value: string) => void) | null = null;
 
-  constructor() {
+  constructor(clearScreen?: boolean) {
+    ensureMinimaxEnvironment();
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -31,6 +95,7 @@ export class AdvisorCLI {
 
     this.sessionManager = new InterviewStateManager();
     this.pipeline = new AgentGenerationPipeline();
+    this.clearScreen = clearScreen ?? shouldClearScreen();
 
     this.setupEventHandlers();
     this.attemptSessionResume();
@@ -64,8 +129,12 @@ export class AdvisorCLI {
         this.conversationMessageCount = metadata.messageCount;
         this.conversationStartTime = metadata.conversationStarted;
 
-        console.log(`\n📂 Resumed session from ${metadata.lastActivity.toLocaleString()}`);
-        console.log(`   Messages: ${metadata.messageCount}, Started: ${metadata.conversationStarted.toLocaleString()}\n`);
+        // Guard against missing fields (legacy sessions may not have full metadata)
+        const lastActivity = metadata.lastActivity ? metadata.lastActivity.toLocaleString() : 'unknown';
+        const startTime = metadata.conversationStarted ? metadata.conversationStarted.toLocaleString() : 'unknown';
+
+        console.log(`\n📂 Resumed session from ${lastActivity}`);
+        console.log(`   Messages: ${metadata.messageCount}, Started: ${startTime}\n`);
       }
     } catch (error) {
       // Silently fail - session resume is optional
@@ -90,6 +159,13 @@ export class AdvisorCLI {
    */
   private setupEventHandlers(): void {
     this.rl.on('line', async (line: string) => {
+      if (this.pendingConfirmation) {
+        const resolver = this.pendingConfirmation;
+        this.pendingConfirmation = null;
+        resolver(line);
+        return;
+      }
+
       const input = line.trim();
 
       if (!input) {
@@ -141,7 +217,7 @@ export class AdvisorCLI {
         break;
 
       case 'save':
-        await this.saveSession(args[0]);
+        await this.saveWithDirectorySelection();
         break;
 
       case 'load':
@@ -166,20 +242,28 @@ export class AdvisorCLI {
    * Handle regular user queries with output capture
    */
   private async handleQuery(query: string): Promise<void> {
-    try {
-      // Capture output by intercepting console writes
-      const capturedChunks: string[] = [];
-      const originalWrite = process.stdout.write.bind(process.stdout);
+    if (this.isBusy) {
+      console.log('\n⚠️  A query is already in progress. Please wait for it to finish before sending another.\n');
+      return;
+    }
 
-      // Override stdout.write to capture output
+    this.isBusy = true;
+    this.rl.pause();
+
+    const capturedChunks: string[] = [];
+    const originalWrite = process.stdout.write.bind(process.stdout);
+    let capturingStdout = false;
+
+    try {
       process.stdout.write = ((chunk: any, encoding?: any, callback?: any): boolean => {
         const text = chunk.toString();
         capturedChunks.push(text);
         return originalWrite(chunk, encoding, callback);
       }) as typeof process.stdout.write;
 
+      capturingStdout = true;
+
       try {
-        // Call runAdvisor with session tracking
         const result = await runAdvisor(
           query,
           this.currentAdvisorSessionId
@@ -187,10 +271,6 @@ export class AdvisorCLI {
             : { continueSession: false }
         );
 
-        // Restore original write
-        process.stdout.write = originalWrite;
-
-        // Update session tracking
         if (result.sessionId) {
           this.currentAdvisorSessionId = result.sessionId;
           this.conversationMessageCount++;
@@ -199,8 +279,6 @@ export class AdvisorCLI {
             this.conversationStartTime = new Date();
           }
 
-          // Update conversation metadata in session manager
-          const metadata = this.sessionManager.getConversationMetadata();
           this.sessionManager.updateConversationMetadata({
             advisorSessionId: result.sessionId,
             messageCount: this.conversationMessageCount,
@@ -208,40 +286,45 @@ export class AdvisorCLI {
             conversationStarted: this.conversationStartTime
           });
 
-          // Persist the updated state
           await this.persistConversationState();
         }
 
-        // Save captured output
         this.lastOutput = capturedChunks.join('');
         this.outputHistory.push(this.lastOutput);
 
-        // Check for code fences and provide copy tips
         if (this.lastOutput.includes('```')) {
           console.log('\n' + '─'.repeat(60));
-          console.log('💡 Tip: Code blocks detected in the output above!');
-          console.log('   • Copy the code from each code fence');
-          console.log('   • Use /save <filename> to save this output to a Markdown file');
+          console.log('💡 Tip: Markdown block detected in the output above!');
+          console.log('   • Copy the planning document content from the Markdown fence');
+          console.log('   • Use /save to save this planning document to a Markdown file');
           console.log('─'.repeat(60) + '\n');
         }
-      } catch (innerError) {
-        // Restore original write on error
-        process.stdout.write = originalWrite;
-        throw innerError;
-      }
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
+      } catch (error) {
+        if (capturingStdout) {
+          process.stdout.write = originalWrite;
+          capturingStdout = false;
+        }
 
-      // Check if this is the "disabled" stub error
-      if (errorMessage.includes('disabled') || errorMessage.includes('SDK API')) {
-        console.log(
-          '\n⚠️  Streaming mode unavailable; using batch pipeline instead.\n'
-        );
-        await this.handleBatchMode(query);
-      } else {
-        console.error('❌ Error:', errorMessage);
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+
+        if (errorMessage.includes('disabled') || errorMessage.includes('SDK API')) {
+          console.log(
+            '\n⚠️  Streaming mode unavailable; using batch pipeline instead.\n'
+          );
+          await this.handleBatchMode(query);
+        } else {
+          console.error('❌ Error:', errorMessage);
+        }
+      } finally {
+        if (capturingStdout) {
+          process.stdout.write = originalWrite;
+          capturingStdout = false;
+        }
       }
+    } finally {
+      this.isBusy = false;
+      this.rl.resume();
     }
   }
 
@@ -254,33 +337,39 @@ export class AdvisorCLI {
         '\n📋 Starting batch pipeline - simplified workflow for testing\n'
       );
 
-      // For MVP, create a minimal requirements object from the query
-      // In production, this would run through the full interview
+      // Create minimal responses using valid interview question IDs
+      // These IDs match the updateRequirementsFromResponse() cases in state-manager.ts
       const minimalResponses: Record<string, any> = {
-        agentName: 'MyAgent',
-        primaryPurpose: initialQuery,
-        targetAudience: 'developers',
-        preferredInteractionStyle: 'conversational',
-        outputRequirements: 'Generated code and configuration',
+        q1_agent_name: 'MyAgent',
+        q2_primary_outcome: initialQuery,
+        q3_target_audience: ['developers'],
+        q4_interaction_style: 'conversational',
+        q5_delivery_channels: ['cli'],
+        q6_success_metrics: ['accuracy', 'speed'],
+        q7_memory_needs: 'short-term',
+        q8_file_access: false,
+        q9_web_access: false,
+        q10_code_execution: false,
+        q11_data_analysis: false,
+        q12_tool_integrations: '',
+        q13_runtime_preference: 'local',
+        q14_constraints: '',
+        q15_additional_notes: 'Batch mode test execution',
       };
 
       console.log('🔄 Running pipeline with minimal configuration...\n');
 
       const result = await this.pipeline.runFullPipeline(minimalResponses, {
         verboseLogging: true,
-        outputDir: './output',
       });
 
       console.log('\n✅ Pipeline complete!\n');
 
-      if (result.generatedFiles) {
-        console.log('📁 Generated files in ./output/:');
-        console.log(`   • Agent code: agent.ts`);
-        console.log(`   • System prompt: system-prompt.txt`);
-        console.log(`   • Configuration: agent-config.json`);
-        console.log(`   • Package file: package.json`);
-        console.log(`   • Environment: .env.example`);
-        console.log(`   • README: README.md\n`);
+      if (result.planningDocument) {
+        console.log('📁 Generated planning document preview:\n');
+        const preview = result.planningDocument.split('\n').slice(0, 12).join('\n');
+        console.log(preview);
+        console.log('\n   • Full document available via generate_planning_document tool.\n');
       }
 
       if (result.recommendations) {
@@ -313,21 +402,40 @@ COMMANDS:
   /exit, /quit       Exit the CLI
   /clear             Clear the screen
   /history           Show command history
-  /save <filename>   Save last advisor output to a Markdown file
+  /save              Save last advisor output to a Markdown file (interactive)
   /load [name]       Load a saved session
   /status            Show current pipeline status
   /templates         List available agent templates
 
+CLI OPTIONS:
+  --no-clear         Disable console clearing on startup (preserves terminal history)
+
+  Console Clearing Precedence (highest to lowest):
+    1. --no-clear flag (runtime override)
+    2. CLEAR_SCREEN environment variable (session preference)
+    3. Default behavior (clear screen = true)
+
+  Examples:
+    npm run cli                    # Default (clear screen)
+    npm run cli -- --no-clear      # Preserve terminal history
+    CLEAR_SCREEN=false npm run cli # Disable via environment
+
 OUTPUT CAPTURE:
   The CLI automatically captures all advisor responses. When the advisor
-  generates code or configuration files, you'll see a tip message with
+  generates a planning document (Markdown), you'll see a tip message with
   instructions to save the output.
 
   Example workflow:
     1. Ask: "I want to build a data analysis agent"
-    2. Advisor generates code with Markdown formatting
-    3. Use: /save my-agent.md
-    4. Copy code blocks from the saved file
+    2. Advisor generates a planning document (Markdown)
+    3. Use: /save (interactive directory and filename selection)
+    4. Copy planning document content from the saved file
+
+ENVIRONMENT VARIABLES:
+  MAX_MESSAGE_LENGTH  Thinking block truncation length (default: 300, range: 50-1000)
+  CLEAR_SCREEN        Clear console on startup (default: true, accepts: true/false/1/0/yes/no)
+
+  See .env.example for complete configuration options.
 
 USAGE:
   Simply type your request and press Enter. The advisor will guide
@@ -341,9 +449,9 @@ USAGE:
 WORKFLOW:
   1. Interview - Answer questions about your requirements
   2. Classification - Get template recommendations
-  3. Generation - Receive generated code and configuration (as Markdown)
+  3. Documentation - Receive a planning document (Markdown)
   4. Save Output - Use /save to write Markdown to disk
-  5. Implementation - Copy code from Markdown and follow guide
+  5. Implementation - Follow the planning document to implement offline
 
 For more information, visit: https://github.com/anthropics/agent-advisor
 `);
@@ -365,31 +473,208 @@ For more information, visit: https://github.com/anthropics/agent-advisor
     console.log();
   }
 
-  /**
-   * Save last output to markdown file
-   */
-  private async saveSession(filename?: string): Promise<void> {
-    if (!filename) {
-      console.log('Usage: /save <filename>');
-      console.log('Example: /save my-agent-output.md');
-      return;
+  private async confirmAction(message: string): Promise<boolean> {
+    if (this.pendingConfirmation) {
+      throw new Error('Another confirmation prompt is already pending.');
     }
 
+    console.log(`${message} (y/N)`);
+
+    return new Promise<boolean>((resolve) => {
+      this.pendingConfirmation = (value: string) => {
+        const normalized = value.trim().toLowerCase();
+        resolve(normalized === 'y' || normalized === 'yes');
+      };
+    });
+  }
+
+  /**
+   * Generic prompt helper for user input
+   */
+  private async prompt(message: string): Promise<string> {
+    if (this.pendingConfirmation) {
+      throw new Error('Another prompt is already pending.');
+    }
+
+    console.log(message);
+
+    return new Promise<string>((resolve) => {
+      this.pendingConfirmation = (value: string) => {
+        resolve(value.trim());
+      };
+    });
+  }
+
+  /**
+   * List directories in the specified path
+   */
+  private async listDirectories(dirPath: string): Promise<string[]> {
+    try {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      const hiddenAndExcludedDirs = new Set(['node_modules', 'dist', 'build', '.git', 'sessions']);
+
+      return entries
+        .filter((entry) => {
+          if (!entry.isDirectory()) return false;
+          if (entry.name.startsWith('.')) return false;
+          if (hiddenAndExcludedDirs.has(entry.name)) return false;
+          return true;
+        })
+        .map((entry) => entry.name)
+        .sort();
+    } catch (error) {
+      console.error('Failed to list directories:', error instanceof Error ? error.message : 'Unknown error');
+      return [];
+    }
+  }
+
+  /**
+   * Create a new directory with sanitized name
+   */
+  private async createNewDirectory(baseDir: string, name: string): Promise<string> {
+    // Sanitize the directory name
+    let sanitized = name.trim();
+
+    // Replace spaces with hyphens
+    sanitized = sanitized.replace(/\s+/g, '-');
+
+    // Remove invalid characters (keep only alphanumeric, hyphens, underscores)
+    sanitized = sanitized.replace(/[^a-zA-Z0-9_-]/g, '');
+
+    // Strip leading/trailing dots and hyphens
+    sanitized = sanitized.replace(/^[.-]+|[.-]+$/g, '');
+
+    // Clamp length to reasonable bounds (1-100 characters)
+    if (sanitized.length > 100) {
+      sanitized = sanitized.substring(0, 100);
+    }
+
+    if (!sanitized || sanitized.length === 0) {
+      throw new Error('Invalid directory name after sanitization');
+    }
+
+    const newDirPath = path.join(baseDir, sanitized);
+
+    try {
+      await fs.mkdir(newDirPath, { recursive: true });
+      return newDirPath;
+    } catch (error) {
+      // Handle already-exists case gracefully
+      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
+        console.log(`   Directory already exists: ${sanitized}`);
+        return newDirPath;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Interactive directory selection
+   */
+  private async selectDirectory(): Promise<string> {
+    const baseDir = process.cwd();
+    const directories = await this.listDirectories(baseDir);
+
+    console.log('\n📁 Select a directory to save the file:');
+    console.log('  1. Use current directory (.)');
+    console.log('  2. Create new directory');
+    console.log('  3. Enter custom path');
+
+    if (directories.length > 0) {
+      console.log('\n  Available directories:');
+      directories.forEach((dir, idx) => {
+        console.log(`  ${idx + 4}. ${dir}/`);
+      });
+    }
+
+    const choice = await this.prompt('\nEnter your choice (number):');
+    const choiceNum = parseInt(choice, 10);
+
+    if (choiceNum === 1) {
+      return baseDir;
+    } else if (choiceNum === 2) {
+      const dirName = await this.prompt('Enter new directory name:');
+      return await this.createNewDirectory(baseDir, dirName);
+    } else if (choiceNum === 3) {
+      const customPath = await this.prompt('Enter custom path:');
+      const resolvedPath = path.resolve(baseDir, customPath);
+
+      // Ensure directory exists
+      await fs.mkdir(resolvedPath, { recursive: true });
+      return resolvedPath;
+    } else if (choiceNum >= 4 && choiceNum < 4 + directories.length) {
+      const selectedDir = directories[choiceNum - 4];
+      return path.join(baseDir, selectedDir);
+    } else {
+      console.log('Invalid choice, using current directory');
+      return baseDir;
+    }
+  }
+
+  /**
+   * Save last output with interactive directory selection
+   */
+  private async saveWithDirectorySelection(): Promise<void> {
     if (!this.lastOutput) {
       console.log('❌ No output to save. Run a query first.');
       return;
     }
 
     try {
-      // Add .md extension if not present
-      const outputFilename = filename.endsWith('.md') ? filename : `${filename}.md`;
-      const outputPath = path.resolve(process.cwd(), outputFilename);
+      // Select directory interactively
+      const selectedDir = await this.selectDirectory();
 
-      // Write the last output to file
-      await fs.writeFile(outputPath, this.lastOutput, 'utf-8');
+      // Generate default filename with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+      const defaultFilename = `advisor-output-${timestamp}.md`;
 
-      console.log(`\n💾 Output saved to: ${outputPath}`);
-      console.log(`📄 File size: ${(this.lastOutput.length / 1024).toFixed(2)} KB\n`);
+      // Prompt for filename
+      const filenameInput = await this.prompt(`\nEnter filename (default: ${defaultFilename}):`);
+      let filename = filenameInput || defaultFilename;
+
+      // Append .md if missing
+      if (!filename.endsWith('.md')) {
+        filename = `${filename}.md`;
+      }
+
+      const resolvedOutputPath = path.join(selectedDir, filename);
+
+      // Path safety validation
+      const baseDirectory = process.cwd();
+      const normalizedPath = path.normalize(resolvedOutputPath);
+      const hasTraversal = normalizedPath.split(path.sep).some((segment) => segment === '..');
+      const escapesBase = path.relative(baseDirectory, resolvedOutputPath).startsWith('..');
+      const isAbsolutePath = path.isAbsolute(filename);
+
+      if (isAbsolutePath || hasTraversal || escapesBase) {
+        console.log('⚠️  The specified path resolves to a location outside the project directory:');
+        console.log(`   ${resolvedOutputPath}`);
+        const confirmed = await this.confirmAction('Proceed with saving to this location?');
+        if (!confirmed) {
+          console.log('Save cancelled.');
+          return;
+        }
+      }
+
+      // Check if file exists
+      try {
+        await fs.access(resolvedOutputPath);
+        const overwriteConfirmed = await this.confirmAction(`File already exists at ${resolvedOutputPath}. Overwrite?`);
+        if (!overwriteConfirmed) {
+          console.log('Save cancelled.');
+          return;
+        }
+      } catch {
+        // File does not exist; continue
+      }
+
+      // Write the file
+      await fs.writeFile(resolvedOutputPath, this.lastOutput, 'utf-8');
+
+      // Show success feedback
+      console.log(`\n✅ Output saved successfully!`);
+      console.log(`   Path: ${resolvedOutputPath}`);
+      console.log(`   Size: ${(this.lastOutput.length / 1024).toFixed(2)} KB\n`);
     } catch (error) {
       console.error(
         '❌ Failed to save output:',
@@ -436,10 +721,14 @@ For more information, visit: https://github.com/anthropics/agent-advisor
         this.conversationMessageCount = metadata.messageCount;
         this.conversationStartTime = metadata.conversationStarted;
 
+        // Guard against missing fields (legacy sessions may not have full metadata)
+        const startTime = metadata.conversationStarted ? metadata.conversationStarted.toLocaleString() : 'unknown';
+        const lastActivity = metadata.lastActivity ? metadata.lastActivity.toLocaleString() : 'unknown';
+
         console.log(`\n✅ Session loaded: ${name}`);
         console.log(`   Messages: ${metadata.messageCount}`);
-        console.log(`   Started: ${metadata.conversationStarted.toLocaleString()}`);
-        console.log(`   Last activity: ${metadata.lastActivity.toLocaleString()}\n`);
+        console.log(`   Started: ${startTime}`);
+        console.log(`   Last activity: ${lastActivity}\n`);
       } else {
         console.log(`\n✅ Session loaded: ${name} (legacy session without metadata)\n`);
       }
@@ -512,7 +801,7 @@ The advisor will recommend the best template based on your requirements.
     console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║              🤖  Agent Advisor CLI v1.0.0                ║
+║              🤖  Agent Advisor CLI v${CLI_VERSION}                ║
 ║                                                           ║
 ║    Create production-ready Claude Agent SDK projects     ║
 ║           powered by MiniMax API integration              ║
@@ -529,6 +818,11 @@ Type /help for available commands or start with a request like:
    * Start the interactive CLI
    */
   start(): void {
+    // Clear screen on startup if configured and in TTY
+    if (this.clearScreen && process.stdout.isTTY) {
+      console.clear();
+    }
+
     this.showWelcome();
     this.rl.prompt();
   }
@@ -541,10 +835,13 @@ const isInteractive =
 
 if (isInteractive) {
   // Interactive mode
-  const cli = new AdvisorCLI();
+  const noClear = args.includes('--no-clear');
+  const clearScreen = noClear ? false : shouldClearScreen();
+  const cli = new AdvisorCLI(clearScreen);
   cli.start();
 } else {
   // Single query mode
+  ensureMinimaxEnvironment();
   const query = args.join(' ');
   runAdvisor(query)
     .then((result) => {
