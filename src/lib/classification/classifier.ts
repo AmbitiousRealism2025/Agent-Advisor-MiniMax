@@ -49,7 +49,6 @@ export class AgentClassifier {
       requiredDependencies: template.requiredDependencies,
       mcpServers,
       systemPrompt,
-      starterCode: this.generateStarterCode(template, requirements),
       toolConfigurations: template.defaultTools,
       estimatedComplexity: complexity,
       implementationSteps,
@@ -311,29 +310,6 @@ export class AgentClassifier {
     return steps;
   }
 
-  /**
-   * Generate starter code reference
-   */
-  private generateStarterCode(template: AgentTemplate, requirements: AgentRequirements): string {
-    return `// ${requirements.name} - Generated from ${template.name} template
-// See full implementation in generated project files
-
-import { Agent } from '@anthropic-ai/claude-agent-sdk';
-import { getMinimaxConfig } from './config.js';
-${template.defaultTools.length > 0 ? `import { ${template.defaultTools.map(t => `${t.name}Tool`).join(', ')} } from './tools.js';\n` : ''}
-const config = getMinimaxConfig();
-
-const agent = new Agent({
-  model: config.model,
-  apiKey: config.apiKey,
-  baseUrl: config.baseUrl,
-  systemPrompt: \`${template.systemPrompt.substring(0, 200)}...\`,
-  tools: [${template.defaultTools.map(t => `${t.name}Tool`).join(', ')}]
-});
-
-// Start agent and handle interactions
-await agent.run();`;
-  }
 
   /**
    * Generate notes about classification results

@@ -8,10 +8,3 @@ export type {
   WriteMultipleFilesOptions,
   FileWriteResult,
 } from './file-writer.js';
-
-export { AgentPackager } from './packager.js';
-export type {
-  PackageAgentOptions,
-  PackageManifest,
-  PackageResult,
-} from './packager.js';

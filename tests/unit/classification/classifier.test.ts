@@ -134,7 +134,6 @@ describe('AgentClassifier', () => {
       expect(recommendations.estimatedComplexity).toBeDefined();
       expect(recommendations.implementationSteps).toBeDefined();
       expect(recommendations.toolConfigurations).toBeDefined();
-      expect(recommendations.starterCode).toBeDefined();
     });
 
     it('should customize system prompt with requirements', () => {

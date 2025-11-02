@@ -111,7 +111,6 @@ export function createMockAgentRecommendations(
       { name: 'filesystem', description: 'File system access', url: 'mcp://filesystem', authentication: 'none' as const }
     ] : [],
     systemPrompt: `You are ${requirements.name}, designed to ${requirements.primaryOutcome}.`,
-    starterCode: '',
     toolConfigurations: [],
     estimatedComplexity: 'medium' as const,
     implementationSteps: [

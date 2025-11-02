@@ -217,7 +217,7 @@ export class AdvisorCLI {
         break;
 
       case 'save':
-        await this.saveSession(args);
+        await this.saveWithDirectorySelection();
         break;
 
       case 'load':
@@ -296,7 +296,7 @@ export class AdvisorCLI {
           console.log('\n' + '─'.repeat(60));
           console.log('💡 Tip: Code blocks detected in the output above!');
           console.log('   • Copy the code from each code fence');
-          console.log('   • Use /save <filename> to save this output to a Markdown file');
+          console.log('   • Use /save to save this output to a Markdown file');
           console.log('─'.repeat(60) + '\n');
         }
       } catch (error) {
@@ -361,19 +361,15 @@ export class AdvisorCLI {
 
       const result = await this.pipeline.runFullPipeline(minimalResponses, {
         verboseLogging: true,
-        outputDir: './output',
       });
 
       console.log('\n✅ Pipeline complete!\n');
 
-      if (result.generatedFiles) {
-        console.log('📁 Generated files in ./output/:');
-        console.log(`   • Agent code: agent.ts`);
-        console.log(`   • System prompt: system-prompt.txt`);
-        console.log(`   • Configuration: agent-config.json`);
-        console.log(`   • Package file: package.json`);
-        console.log(`   • Environment: .env.example`);
-        console.log(`   • README: README.md\n`);
+      if (result.planningDocument) {
+        console.log('📁 Generated planning document preview:\n');
+        const preview = result.planningDocument.split('\n').slice(0, 12).join('\n');
+        console.log(preview);
+        console.log('\n   • Full document available via generate_planning_document tool.\n');
       }
 
       if (result.recommendations) {
@@ -406,7 +402,7 @@ COMMANDS:
   /exit, /quit       Exit the CLI
   /clear             Clear the screen
   /history           Show command history
-  /save <filename>   Save last advisor output to a Markdown file
+  /save              Save last advisor output to a Markdown file (interactive)
   /load [name]       Load a saved session
   /status            Show current pipeline status
   /templates         List available agent templates
@@ -432,7 +428,7 @@ OUTPUT CAPTURE:
   Example workflow:
     1. Ask: "I want to build a data analysis agent"
     2. Advisor generates code with Markdown formatting
-    3. Use: /save my-agent.md
+    3. Use: /save (interactive directory and filename selection)
     4. Copy code blocks from the saved file
 
 ENVIRONMENT VARIABLES:
@@ -477,73 +473,6 @@ For more information, visit: https://github.com/anthropics/agent-advisor
     console.log();
   }
 
-  /**
-   * Save last output to markdown file
-   */
-  private async saveSession(args: string[] = []): Promise<void> {
-    const tokens = args.filter(Boolean);
-    const force = tokens.includes('--force');
-    const positional = tokens.filter((token) => token !== '--force');
-
-    const filename = positional[0];
-    if (!filename) {
-      console.log('Usage: /save <filename> [--force]');
-      console.log('Example: /save my-agent-output.md');
-      return;
-    }
-
-    if (!this.lastOutput) {
-      console.log('❌ No output to save. Run a query first.');
-      return;
-    }
-
-    try {
-      // Add .md extension if not present
-      const filenameWithExtension = filename.endsWith('.md') ? filename : `${filename}.md`;
-      const baseDirectory = process.cwd();
-      const normalizedInput = path.normalize(filenameWithExtension);
-      const resolvedOutputPath = path.resolve(baseDirectory, normalizedInput);
-
-      const hasTraversal = normalizedInput.split(path.sep).some((segment) => segment === '..');
-      const escapesBase = path.relative(baseDirectory, resolvedOutputPath).startsWith('..');
-      const isAbsolutePath = path.isAbsolute(filenameWithExtension);
-
-      if (!force && (isAbsolutePath || hasTraversal || escapesBase)) {
-        console.log('⚠️  The specified path resolves to a location outside the project directory:');
-        console.log(`   ${resolvedOutputPath}`);
-        const confirmed = await this.confirmAction('Proceed with saving to this location?');
-        if (!confirmed) {
-          console.log('Save cancelled.');
-          return;
-        }
-      }
-
-      if (!force) {
-        try {
-          await fs.access(resolvedOutputPath);
-          const overwriteConfirmed = await this.confirmAction(`File already exists at ${resolvedOutputPath}. Overwrite?`);
-          if (!overwriteConfirmed) {
-            console.log('Save cancelled.');
-            return;
-          }
-        } catch {
-          // File does not exist; continue
-        }
-      }
-
-      // Write the last output to file
-      await fs.writeFile(resolvedOutputPath, this.lastOutput, 'utf-8');
-
-      console.log(`\n💾 Output saved to: ${resolvedOutputPath}`);
-      console.log(`📄 File size: ${(this.lastOutput.length / 1024).toFixed(2)} KB\n`);
-    } catch (error) {
-      console.error(
-        '❌ Failed to save output:',
-        error instanceof Error ? error.message : 'Unknown error'
-      );
-    }
-  }
-
   private async confirmAction(message: string): Promise<boolean> {
     if (this.pendingConfirmation) {
       throw new Error('Another confirmation prompt is already pending.');
@@ -557,6 +486,201 @@ For more information, visit: https://github.com/anthropics/agent-advisor
         resolve(normalized === 'y' || normalized === 'yes');
       };
     });
+  }
+
+  /**
+   * Generic prompt helper for user input
+   */
+  private async prompt(message: string): Promise<string> {
+    if (this.pendingConfirmation) {
+      throw new Error('Another prompt is already pending.');
+    }
+
+    console.log(message);
+
+    return new Promise<string>((resolve) => {
+      this.pendingConfirmation = (value: string) => {
+        resolve(value.trim());
+      };
+    });
+  }
+
+  /**
+   * List directories in the specified path
+   */
+  private async listDirectories(dirPath: string): Promise<string[]> {
+    try {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      const hiddenAndExcludedDirs = new Set(['node_modules', 'dist', 'build', '.git', 'sessions']);
+
+      return entries
+        .filter((entry) => {
+          if (!entry.isDirectory()) return false;
+          if (entry.name.startsWith('.')) return false;
+          if (hiddenAndExcludedDirs.has(entry.name)) return false;
+          return true;
+        })
+        .map((entry) => entry.name)
+        .sort();
+    } catch (error) {
+      console.error('Failed to list directories:', error instanceof Error ? error.message : 'Unknown error');
+      return [];
+    }
+  }
+
+  /**
+   * Create a new directory with sanitized name
+   */
+  private async createNewDirectory(baseDir: string, name: string): Promise<string> {
+    // Sanitize the directory name
+    let sanitized = name.trim();
+
+    // Replace spaces with hyphens
+    sanitized = sanitized.replace(/\s+/g, '-');
+
+    // Remove invalid characters (keep only alphanumeric, hyphens, underscores)
+    sanitized = sanitized.replace(/[^a-zA-Z0-9_-]/g, '');
+
+    // Strip leading/trailing dots and hyphens
+    sanitized = sanitized.replace(/^[.-]+|[.-]+$/g, '');
+
+    // Clamp length to reasonable bounds (1-100 characters)
+    if (sanitized.length > 100) {
+      sanitized = sanitized.substring(0, 100);
+    }
+
+    if (!sanitized || sanitized.length === 0) {
+      throw new Error('Invalid directory name after sanitization');
+    }
+
+    const newDirPath = path.join(baseDir, sanitized);
+
+    try {
+      await fs.mkdir(newDirPath, { recursive: true });
+      return newDirPath;
+    } catch (error) {
+      // Handle already-exists case gracefully
+      if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
+        console.log(`   Directory already exists: ${sanitized}`);
+        return newDirPath;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Interactive directory selection
+   */
+  private async selectDirectory(): Promise<string> {
+    const baseDir = process.cwd();
+    const directories = await this.listDirectories(baseDir);
+
+    console.log('\n📁 Select a directory to save the file:');
+    console.log('  1. Use current directory (.)');
+    console.log('  2. Create new directory');
+    console.log('  3. Enter custom path');
+
+    if (directories.length > 0) {
+      console.log('\n  Available directories:');
+      directories.forEach((dir, idx) => {
+        console.log(`  ${idx + 4}. ${dir}/`);
+      });
+    }
+
+    const choice = await this.prompt('\nEnter your choice (number):');
+    const choiceNum = parseInt(choice, 10);
+
+    if (choiceNum === 1) {
+      return baseDir;
+    } else if (choiceNum === 2) {
+      const dirName = await this.prompt('Enter new directory name:');
+      return await this.createNewDirectory(baseDir, dirName);
+    } else if (choiceNum === 3) {
+      const customPath = await this.prompt('Enter custom path:');
+      const resolvedPath = path.resolve(baseDir, customPath);
+
+      // Ensure directory exists
+      await fs.mkdir(resolvedPath, { recursive: true });
+      return resolvedPath;
+    } else if (choiceNum >= 4 && choiceNum < 4 + directories.length) {
+      const selectedDir = directories[choiceNum - 4];
+      return path.join(baseDir, selectedDir);
+    } else {
+      console.log('Invalid choice, using current directory');
+      return baseDir;
+    }
+  }
+
+  /**
+   * Save last output with interactive directory selection
+   */
+  private async saveWithDirectorySelection(): Promise<void> {
+    if (!this.lastOutput) {
+      console.log('❌ No output to save. Run a query first.');
+      return;
+    }
+
+    try {
+      // Select directory interactively
+      const selectedDir = await this.selectDirectory();
+
+      // Generate default filename with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+      const defaultFilename = `advisor-output-${timestamp}.md`;
+
+      // Prompt for filename
+      const filenameInput = await this.prompt(`\nEnter filename (default: ${defaultFilename}):`);
+      let filename = filenameInput || defaultFilename;
+
+      // Append .md if missing
+      if (!filename.endsWith('.md')) {
+        filename = `${filename}.md`;
+      }
+
+      const resolvedOutputPath = path.join(selectedDir, filename);
+
+      // Path safety validation
+      const baseDirectory = process.cwd();
+      const normalizedPath = path.normalize(resolvedOutputPath);
+      const hasTraversal = normalizedPath.split(path.sep).some((segment) => segment === '..');
+      const escapesBase = path.relative(baseDirectory, resolvedOutputPath).startsWith('..');
+      const isAbsolutePath = path.isAbsolute(filename);
+
+      if (isAbsolutePath || hasTraversal || escapesBase) {
+        console.log('⚠️  The specified path resolves to a location outside the project directory:');
+        console.log(`   ${resolvedOutputPath}`);
+        const confirmed = await this.confirmAction('Proceed with saving to this location?');
+        if (!confirmed) {
+          console.log('Save cancelled.');
+          return;
+        }
+      }
+
+      // Check if file exists
+      try {
+        await fs.access(resolvedOutputPath);
+        const overwriteConfirmed = await this.confirmAction(`File already exists at ${resolvedOutputPath}. Overwrite?`);
+        if (!overwriteConfirmed) {
+          console.log('Save cancelled.');
+          return;
+        }
+      } catch {
+        // File does not exist; continue
+      }
+
+      // Write the file
+      await fs.writeFile(resolvedOutputPath, this.lastOutput, 'utf-8');
+
+      // Show success feedback
+      console.log(`\n✅ Output saved successfully!`);
+      console.log(`   Path: ${resolvedOutputPath}`);
+      console.log(`   Size: ${(this.lastOutput.length / 1024).toFixed(2)} KB\n`);
+    } catch (error) {
+      console.error(
+        '❌ Failed to save output:',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
   }
 
   /**

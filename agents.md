@@ -3,9 +3,9 @@
 Welcome to the Agent Advisor MiniMax MVP. This document gives future coding agents a concise overview of the project goals, setup steps, and expectations for each development phase.
 
 ## Mission Overview
-- Build an advisor agent that interviews developers, classifies their needs, and generates Claude Agent SDK projects targeting the MiniMax API.
+- Build an advisor agent that interviews developers, classifies their needs, and generates comprehensive planning documents for Claude Agent SDK implementation targeting the MiniMax API.
 - Maintain strict adherence to the five core templates defined in the Phase 1 plan until the roadmap specifies otherwise.
-- Ensure all generated code works with Node.js 18+, the MiniMax-M2 model, and the Claude Agent SDK.
+- Output is a single Markdown planning document with 8 standardized sections providing actionable implementation guidance.
 
 ## Setup Checklist
 1. Review `agent_advisor_mvp-plan.md` for architectural details, timelines, and template specifications.
@@ -22,32 +22,45 @@ Welcome to the Agent Advisor MiniMax MVP. This document gives future coding agen
 ## Project Layout
 ```
 src/
-├── templates/            # Agent templates (Phase 2 deliverable)
+├── templates/            # 5 agent document templates (documentation-focused)
+│   ├── index.ts          # Template registry with lookup functions
+│   ├── template-types.ts # DocumentTemplate, DocumentSection types
+│   ├── sections/         # Standardized documentation sections
+│   │   └── index.ts      # SECTION_TEMPLATES (8 standardized sections)
+│   ├── data-analyst.ts   # Data Analyst document template
+│   ├── content-creator.ts # Content Creator document template
+│   ├── code-assistant.ts # Code Assistant document template
+│   ├── research-agent.ts # Research Agent document template
+│   └── automation-agent.ts # Automation Agent document template
 ├── lib/
-│   ├── interview/        # Interview flow logic
+│   ├── interview/        # Interview flow logic with session management
 │   ├── classification/   # Template matching engine
-│   ├── generation/       # Code + prompt generation
-│   └── export/           # Packaging + delivery utilities
+│   ├── documentation/    # Planning document generator
+│   └── export/           # (legacy utilities, not used in main workflow)
 ├── types/                # Shared TypeScript definitions
 └── utils/                # Configuration + validation helpers
 
-tests/                    # Vitest suites (Phase 2+)
+tests/                    # Vitest suites (184/184 documentation tests passing)
 ├── fixtures/             # Sample requirements and responses
 ├── utils/                # Test helpers and utilities
 │   ├── test-helpers.ts   # Temp dirs, TypeScript compilation, JSON validation
 │   ├── markdown-validator.ts  # Markdown parsing and validation
 │   └── e2e-helpers.ts    # E2E test wrappers for generators
 ├── unit/                 # Module-level tests
+│   └── documentation/    # Documentation generator tests (123/123 passing)
+│       ├── document-generator.test.ts  # PlanningDocumentGenerator tests (78 tests)
+│       └── planning-tool.test.ts       # MCP tool handler tests (45 tests)
 ├── integration/          # Multi-module workflow tests
 ├── validation/           # TypeScript compilation checks
 └── e2e/                  # End-to-end workflow tests
+    ├── document-generation.test.ts     # Documentation workflow E2E (61/61 passing)
     ├── advisor-workflow.test.ts
     ├── conversation-state.test.ts
     ├── conversation-state-simple.test.ts
-    ├── markdown-output-validation.test.ts
-    └── code-compilation-validation.test.ts
+    └── markdown-output-validation.test.ts
 
-examples/                 # Generated reference projects
+sessions/                 # Interview session persistence (gitignored)
+examples/                 # Reference implementations
 ```
 
 ## Scripts
@@ -68,20 +81,47 @@ Comprehensive utilities for parsing and validating Markdown outputs:
 - `validateCodeBlock()` — Validate individual code blocks
 
 ### E2E Test Helpers (`tests/utils/e2e-helpers.ts`)
-Simplified wrappers for testing generation without full MCP setup:
-- `generateAgentCode()` — Wraps `CodeGenerator` with Markdown formatting
-- `generateSystemPrompt()` — Wraps `PromptGenerator` with Markdown formatting
-- `generateConfigFiles()` — Wraps `ConfigGenerator` with Markdown formatting
-- `generateImplementationGuide()` — Wraps `AgentPackager` with Markdown formatting
+Simplified wrappers for testing planning document generation without full MCP setup:
+- `generatePlanningDocument()` — Wraps `PlanningDocumentGenerator` for E2E tests
+- Returns structured results for validation in test scenarios
 
-All functions return `{ status: 'success' | 'error', markdown?, error? }`.
+All functions return validation-ready output for test assertions.
 
 ### E2E Test Suite
-- **`advisor-workflow.test.ts`** — Complete workflow from interview to export, all 5 templates
+- **`advisor-workflow.test.ts`** — Complete workflow from interview to planning document, all 5 templates
 - **`conversation-state.test.ts`** — Session persistence, resume flow, and multi-session handling
 - **`conversation-state-simple.test.ts`** — Conversation metadata tracking (10/10 passing)
-- **`markdown-output-validation.test.ts`** — Markdown structure validation for all generation tools
-- **`code-compilation-validation.test.ts`** — TypeScript compilation from generated Markdown
+- **`markdown-output-validation.test.ts`** — Markdown structure validation for planning documents
+- **`document-generation.test.ts`** — Documentation workflow E2E (61/61 passing)
+
+### Documentation Module Test Suite (184/184 passing - 100%)
+
+**Unit Tests - PlanningDocumentGenerator (78 tests)**
+- `tests/unit/documentation/document-generator.test.ts`
+- Validates document generation for all 5 templates
+- Verifies all 8 required sections (Overview, Requirements, Architecture, Phases, Security, Metrics, Risk, Deployment)
+- Checks heading hierarchy (H1 title, H2 sections)
+- Ensures no code blocks or code-like patterns in documentation output
+- Tests section ordering and content substantiveness
+- Covers edge cases: empty steps, no MCP servers, minimal/complex requirements
+
+**Unit Tests - Planning Tool Handler (45 tests)**
+- `tests/unit/documentation/planning-tool.test.ts`
+- Validates MCP tool configuration and handler
+- Tests input validation for all parameters (templateId, agentName, requirements, recommendations)
+- Verifies Markdown-wrapped output format (file headers, code fences, copy instructions)
+- Checks error handling and Markdown error formatting
+- Ensures successful generation for all 5 templates
+- Validates Next Steps section presence
+
+**E2E Tests - Documentation Workflow (61 tests)**
+- `tests/e2e/document-generation.test.ts`
+- Tests complete workflow: Requirements → Classification → Planning Document
+- Validates cross-template consistency (structure, heading hierarchy, sections)
+- Ensures unique content per template
+- Tests edge cases with minimal and complex requirements
+- Validates integration between classifier and generator
+- Verifies no code blocks in final output
 
 ## Implementation Status
 
@@ -190,172 +230,184 @@ Returns: Current question and progress
 ```
 Returns: Session state and collected requirements
 
-### ✅ Phase 2 - Agent Templates (Completed)
-Five production-ready agent templates have been implemented with complete tool definitions, system prompts, and starter code.
+### ✅ Phase 2 - Agent Document Templates (Completed)
+Five comprehensive document templates have been implemented with standardized documentation structure and implementation guidance.
 
-#### Template Overview
+**IMPORTANT TRANSFORMATION**: Templates have been converted from code-generation format to **documentation templates** that provide comprehensive implementation guidance.
 
-| Template ID | Name | Tools | Capabilities |
-|------------|------|-------|--------------|
-| `data-analyst` | Data Analyst Agent | 4 | CSV processing, statistical analysis, visualization, reporting |
-| `content-creator` | Content Creator Agent | 4 | Content generation, SEO optimization, multi-platform formatting |
-| `code-assistant` | Code Assistant Agent | 4 | Code review, refactoring, test generation, quality analysis |
-| `research-agent` | Research Agent | 4 | Web search, scraping, fact extraction, source verification |
-| `automation-agent` | Automation Agent | 4 | Task scheduling, workflow orchestration, queue management |
+#### Document Template Overview
 
-#### 1. Data Analyst Template
-**File:** `src/templates/data-analyst.ts`
-**Purpose:** CSV data processing, statistical analysis, and report generation
+| Template ID | Name | Sections | Focus Areas |
+|------------|------|----------|-------------|
+| `data-analyst` | Data Analyst Agent | 8 | CSV processing, statistical analysis, visualization, reporting |
+| `content-creator` | Content Creator Agent | 8 | Content generation, SEO optimization, multi-platform formatting |
+| `code-assistant` | Code Assistant Agent | 8 | Code review, refactoring, test generation, quality analysis |
+| `research-agent` | Research Agent | 8 | Web search, content extraction, fact-checking, source verification |
+| `automation-agent` | Automation Agent | 8 | Task scheduling, workflow orchestration, queue management |
 
-**Tools:**
-- `read_csv(filePath, delimiter, hasHeaders, encoding)` - Parse CSV with top-level parameters (encoding: utf8/utf16le/latin1)
-- `analyze_data(data, analysisType, columns?, groupBy?)` - Descriptive, correlation, regression, distribution analysis
-- `generate_visualization(data, chartType, xAxis, yAxis, title?, outputPath)` - Bar, line, scatter, pie, histogram, heatmap charts (xAxis/yAxis required)
-- `export_report(data, format, outputPath, includeMetadata)` - Export as JSON, CSV, Markdown, HTML (default: markdown)
+#### Document Template Structure
 
-**Tool Schema Details:**
+Each template contains:
+1. **8 Standardized Sections**:
+   - Overview (purpose, capabilities, use cases, prerequisites)
+   - Architecture (system design, components, patterns)
+   - Implementation (project structure, tool specs, configuration)
+   - Testing (strategy, unit/integration/E2E tests, fixtures)
+   - Deployment (environment setup, build process, deployment options)
+   - Monitoring (metrics, logging, alerting, dashboards)
+   - Troubleshooting (common issues, debugging, resolutions)
+   - Maintenance (regular tasks, updates, optimization)
+
+2. **Planning Checklist**: Pre-implementation items to consider
+3. **Architecture Patterns**: Recommended architectural approaches
+4. **Risk Considerations**: Potential risks and mitigation strategies
+5. **Success Criteria**: Measurable success indicators
+6. **Implementation Guidance**: Step-by-step implementation instructions
+
+#### Template Files and Content
+
+All template files have been converted to document templates. Each file exports a `*DocumentTemplate` constant:
+
+**Files:**
+- `src/templates/data-analyst.ts` → `dataAnalystDocumentTemplate`
+- `src/templates/content-creator.ts` → `contentCreatorDocumentTemplate`
+- `src/templates/code-assistant.ts` → `codeAssistantDocumentTemplate`
+- `src/templates/research-agent.ts` → `researchAgentDocumentTemplate`
+- `src/templates/automation-agent.ts` → `automationAgentDocumentTemplate`
+
+**What Changed:**
+- ❌ **Removed**: Tool schema definitions, system prompts, starter code, dependency lists
+- ✅ **Added**: 8 standardized documentation sections with comprehensive guidance
+- ✅ **Added**: Planning checklists, architecture patterns, risk considerations
+- ✅ **Added**: Success criteria, implementation guidance (step-by-step)
+
+**Example: Data Analyst Document Template**
 ```typescript
-// read_csv - All parameters at top level
-{
-  filePath: string (min: 1),
-  delimiter: string (default: ','),
-  hasHeaders: boolean (default: true),
-  encoding: 'utf8' | 'utf16le' | 'latin1' (default: 'utf8')
-}
+import { dataAnalystDocumentTemplate } from './src/templates/data-analyst.js';
 
-// analyze_data - Removed options object, added groupBy
-{
-  data: Array<Record<unknown>>,
-  analysisType: 'descriptive' | 'correlation' | 'regression' | 'distribution',
-  columns?: string[],
-  groupBy?: string
-}
+// Access documentation sections
+console.log(dataAnalystDocumentTemplate.documentSections.overview);
+console.log(dataAnalystDocumentTemplate.documentSections.implementation);
 
-// generate_visualization - xAxis/yAxis required, no config nesting
-{
-  data: Array<Record<unknown>>,
-  chartType: 'bar' | 'line' | 'scatter' | 'pie' | 'histogram' | 'heatmap',
-  xAxis: string,
-  yAxis: string,
-  title?: string,
-  outputPath: string
-}
-
-// export_report - Simplified to data parameter, removed PDF
-{
-  data: Record<unknown>,
-  format: 'json' | 'csv' | 'markdown' | 'html' (default: 'markdown'),
-  outputPath: string,
-  includeMetadata: boolean (default: true)
-}
+// Access guidance
+console.log(dataAnalystDocumentTemplate.planningChecklist);
+console.log(dataAnalystDocumentTemplate.architecturePatterns);
+console.log(dataAnalystDocumentTemplate.implementationGuidance);
 ```
 
-**Dependencies:** `csv-parse`, `chart.js` (or d3, plotly)
-**Recommended Integrations:** PostgreSQL, MySQL, S3, Google Sheets, Tableau
-
-#### 2. Content Creator Template
-**File:** `src/templates/content-creator.ts`
-**Purpose:** Blog posts, documentation, marketing copy, and SEO optimization
-
-**Tools:**
-- `generate_outline(topic, contentType, targetAudience?, keyPoints?, tone?, length?)` - Structured outlines
-- `write_section(sectionTitle, outline?, context?, style?, wordCount?)` - Section writing with tone control
-- `optimize_for_seo(content, primaryKeyword, secondaryKeywords?, options?)` - SEO analysis and optimization
-- `format_content(content, outputFormat, options?)` - Format for WordPress, Medium, GitHub, LinkedIn
-
-**Dependencies:** None (core functionality)
-**Recommended Integrations:** WordPress, Contentful, Grammarly API, Medium API
-
-#### 3. Code Assistant Template
-**File:** `src/templates/code-assistant.ts`
-**Purpose:** Code review, debugging, refactoring, and test generation
-
-**Tools:**
-- `analyze_code(code, language, analysisTypes, options?)` - Quality, security, performance analysis
-- `suggest_improvements(code, language, focus, options?)` - Prioritized improvements with examples
-- `generate_tests(code, language, testFramework?, options?)` - Unit/integration tests with mocks
-- `refactor_code(code, language, refactoringGoals, options?)` - Extract functions, simplify, modernize
-
-**Dependencies:** None (core functionality)
-**Recommended Integrations:** ESLint, Prettier, Jest, Vitest, SonarQube, GitHub
-
-#### 4. Research Agent Template
-**File:** `src/templates/research-agent.ts`
-**Purpose:** Web search, content extraction, fact-checking, and source verification
-
-**Tools:**
-- `web_search(query, options?)` - Search with date range, domain filtering, language options
-- `scrape_content(url, selectors?, options?)` - Extract content with CSS selectors
-- `extract_facts(content, focusAreas?, options?)` - Extract statistics, claims, dates, entities
-- `verify_sources(claims, sources, options?)` - Verify credibility with cross-referencing
-
-**Dependencies:** `axios`, `cheerio`
-**Recommended Integrations:** Google Custom Search, Bing API, Puppeteer, Wikipedia API
-
-#### 5. Automation Agent Template
-**File:** `src/templates/automation-agent.ts`
-**Purpose:** Task orchestration, workflow automation, and scheduled execution
-
-**Tools:**
-- `schedule_task(taskId, taskName, schedule, action, options?)` - Cron-based scheduling
-- `execute_workflow(workflowId, steps, input?, options?)` - Multi-step conditional workflows
-- `monitor_status(targets, options?)` - Status monitoring with history and metrics
-- `manage_queue(queueName, operation, config?)` - Queue management with priority and rate limiting
-
-**Dependencies:** `node-cron`, `bull` (or BullMQ)
-**Recommended Integrations:** RabbitMQ, Redis, Temporal, Airflow, Prometheus
+**Standardized Sections** (`src/templates/sections/index.ts`):
+All templates use the same 8 section templates as a base, then customize with agent-specific content:
+- `SECTION_TEMPLATES.overview` - Purpose, capabilities, use cases, prerequisites
+- `SECTION_TEMPLATES.architecture` - System components, data flow, design patterns
+- `SECTION_TEMPLATES.implementation` - Project structure, core modules, configuration
+- `SECTION_TEMPLATES.testing` - Testing strategy, test cases, fixtures
+- `SECTION_TEMPLATES.deployment` - Environment setup, build process, deployment steps
+- `SECTION_TEMPLATES.monitoring` - Key metrics, logging, alerting, dashboards
+- `SECTION_TEMPLATES.troubleshooting` - Common issues, debugging, resolutions
+- `SECTION_TEMPLATES.maintenance` - Regular tasks, updates, optimization
 
 #### Template System Architecture
 
 **Core Files:**
 - `src/templates/template-types.ts` - Shared types and helpers
-  - `TemplateCategory` type
-  - `ToolSchemaDefinition` interface
-  - `convertToolSchemaToConfig()` - Zod to JSON conversion
-  - `createTemplate()` - Template factory function
+  - `DocumentSection` interface - Section structure
+  - `DocumentTemplate` interface - Template structure
+  - `createDocumentTemplate()` - Document template factory with validation
+  - Legacy: `AgentTemplate`, `ToolSchemaDefinition`, `createTemplate()` (deprecated)
+
+- `src/templates/sections/index.ts` - Standardized documentation sections
+  - `SECTION_TEMPLATES` - All 8 standardized sections
+  - `SectionName` type - Union of section keys
+  - `getSectionTemplate(name)` - Get section by name
+  - `getAllSectionNames()` - Get all section keys
 
 - `src/templates/index.ts` - Template registry and utilities
-  - `ALL_TEMPLATES` - Array of all 5 templates
-  - `getTemplateById(id)` - Template lookup
-  - `getTemplatesByCapability(tag)` - Filter by capability
-  - `getAllCapabilityTags()` - Get all unique tags
-  - `TEMPLATE_COUNT`, `TEMPLATE_CATEGORIES` - Constants
+  - `ALL_DOCUMENT_TEMPLATES` - Array of all 5 document templates
+  - `getDocumentTemplateById(id)` - Template lookup
+  - `getDocumentTemplatesByCapability(tag)` - Filter by capability
+  - `getDocumentTemplateSummaries()` - Get summaries with section counts
+  - Legacy: `ALL_TEMPLATES`, `getTemplateById()` (deprecated)
 
-**Template Structure:**
+**Document Template Structure:**
 ```typescript
-interface AgentTemplate {
+interface DocumentTemplate {
   id: string;
   name: string;
   description: string;
   capabilityTags: string[];
   idealFor: string[];
-  systemPrompt: string;
-  defaultTools: ToolConfiguration[];
-  requiredDependencies: string[];
-  recommendedIntegrations: string[];
+  documentSections: Record<string, DocumentSection>;
+  planningChecklist: string[];
+  architecturePatterns: string[];
+  riskConsiderations: string[];
+  successCriteria: string[];
+  implementationGuidance: string[];
+}
+
+interface DocumentSection {
+  title: string;
+  description: string;
+  subsections: string[];
+  contentGuidance: string[];
+  examples?: string[];
 }
 ```
 
-#### Using Templates
+#### Using Document Templates
 ```typescript
 import {
-  ALL_TEMPLATES,
-  getTemplateById,
-  getTemplatesByCapability,
-  dataAnalystTemplate
+  ALL_DOCUMENT_TEMPLATES,
+  getDocumentTemplateById,
+  getDocumentTemplatesByCapability,
+  getDocumentTemplateSummaries,
+  dataAnalystDocumentTemplate
 } from './src/templates';
 
-// Access all templates
-console.log(`${ALL_TEMPLATES.length} templates available`);
+// Access all document templates
+console.log(`${ALL_DOCUMENT_TEMPLATES.length} document templates available`);
 
-// Get specific template
-const template = getTemplateById('data-analyst');
-console.log(template.systemPrompt);
-console.log(template.defaultTools); // JSON-serializable configs
+// Get template by ID
+const template = getDocumentTemplateById('data-analyst');
 
-// Find templates by capability
-const dataTemplates = getTemplatesByCapability('data-processing');
+// Access documentation sections
+console.log(template.documentSections.overview);
+console.log(template.documentSections.implementation);
+
+// Access guidance
+console.log(template.planningChecklist);
+console.log(template.successCriteria);
+
+// Get summaries
+const summaries = getDocumentTemplateSummaries();
+// Returns: { id, name, description, sectionCount, capabilityTags }[]
 ```
+
+**Legacy Code Template API (Deprecated):**
+The old code-generation template API is still available for backward compatibility but marked as deprecated:
+```typescript
+// ⚠️ Deprecated - use document templates instead
+import { ALL_TEMPLATES, getTemplateById, dataAnalystTemplate } from './src/templates';
+```
+
+#### Documentation-First Philosophy
+
+**IMPORTANT**: The system produces Markdown-only output. The advisor never writes files directly or generates code scaffolding.
+
+**User Workflow**:
+1. User poses questions through interactive CLI or direct queries
+2. Advisor generates comprehensive planning document (Markdown with 8 sections)
+3. CLI detects code fences and shows copy tips
+4. User runs `/save` command to launch interactive save workflow
+5. User selects directory, enters filename, confirms path safety
+6. Planning document saved to chosen location
+7. User executes implementation plan offline with full control
+
+**Benefits**:
+- Safe, reviewable output before persistence
+- Users control when and where to save
+- Portable Markdown format for easy sharing
+- No automated code generation drift
+- Clear separation between planning and execution
 
 ### ✅ Phase 3 - Classification Module (Completed)
 The classification module analyzes interview requirements and recommends the best template match.
@@ -453,275 +505,80 @@ console.log(recommendations.mcpServers.length);   // 2
 console.log(recommendations.implementationSteps.length); // 8-12 steps
 ```
 
-### ✅ Phase 4 - Generation Module (Completed)
-The generation module creates complete, production-ready agent projects from templates and requirements.
+### ✅ Phase 4 - Documentation Module (Completed)
+The documentation module replaces code generation with a planning-first deliverable. It synthesizes interview data and classification guidance into a single Markdown brief teams can execute without additional tooling.
 
 #### Core Components
 
-**1. CodeGenerator (`src/lib/generation/code-generator.ts`)**
+**1. PlanningDocumentGenerator (`src/lib/documentation/document-generator.ts`)**
 
-Generates complete TypeScript agent implementation with all components.
+Transforms the chosen template, requirements, and recommendations into a narrative plan.
 
-**Methods:**
-- `generateFullCode(options)` → Complete agent.ts implementation with:
-  - Import statements (SDK, Zod, dependencies)
-  - Utility functions (error handling, validation)
-  - Tool implementations (one per template tool)
-  - Agent initialization with MiniMax config
-  - Main execution function
-  - Sample usage documentation
+- Validates the agent name format and template ID.
+- Summarizes primary outcomes, audiences, delivery channels, and capability expectations.
+- Organizes implementation steps into three phases (Foundations, Build, Validation & Launch).
+- Surfaces compliance, security, and credential considerations.
+- Records risks, open questions, and deployment guidance, including MCP server setup.
 
-**Options:**
-```typescript
-{
-  templateId: string,
-  agentName: string,
-  includeComments?: boolean,        // Default: true
-  includeErrorHandling?: boolean,   // Default: true
-  includeSampleUsage?: boolean      // Default: true
-}
-```
+**Planning Document Sections**
 
-**Generated Code Structure:**
-```typescript
-// Imports (SDK, Zod, template-specific dependencies)
-import { Agent, tool } from '@anthropic-ai/claude-agent-sdk';
-import { getMinimaxConfig } from './config.js';
+Every generated brief contains the mandated eight sections:
+1. Overview
+2. Requirements
+3. Architecture
+4. Phases
+5. Security
+6. Metrics
+7. Risk
+8. Deployment
 
-// Utilities
-function handleError(error, context) {...}
+Each section is written in Markdown with bullet points or ordered lists for fast reviews and stakeholder handoff.
 
-// Tool Implementations (generated from template.defaultTools)
-const readCsvSchema = z.object({...});
-export const readCsvTool = tool('read_csv', '...', readCsvSchema.shape, async (input) => {...});
+**2. Documentation Tool (`src/lib/documentation/tool-handler.ts`)**
 
-// Agent Initialization
-const config = getMinimaxConfig();
-const agent = new Agent({
-  model: config.model,
-  apiKey: config.apiKey,
-  systemPrompt: `...`,
-  tools: [readCsvTool, analyzeDataTool, ...]
-});
+`createGeneratePlanningDocumentTool()` wraps the generator for MCP use:
 
-// Main Function
-async function main() {...}
-```
-
-**2. PromptGenerator (`src/lib/generation/prompt-generator.ts`)**
-
-Generates customized system prompts with comprehensive role definition.
-
-**Methods:**
-- `generate(options)` → Full system prompt with sections:
-  - **Header** - Agent name and description
-  - **Role Definition** - Template role + ideal use cases
-  - **Capabilities** - Core tools, system capabilities, integrations
-  - **Objectives** - Primary outcome, target audience
-  - **Constraints** - Operational constraints, compliance requirements
-  - **Interaction Guidelines** - Style-specific guidance, delivery channels
-  - **Examples** - Template-specific interaction examples
-  - **Success Metrics** - How performance is measured
-- `generateConcise(options)` → Short version (no examples, concise sections)
-- `generateDetailed(options)` → Extended version (all sections, detailed examples)
-
-**Options:**
-```typescript
-{
-  templateId: string,
-  requirements: AgentRequirements,
-  includeExamples?: boolean,      // Default: true
-  includeConstraints?: boolean,   // Default: true
-  verbosityLevel?: 'concise' | 'standard' | 'detailed'  // Default: 'standard'
-}
-```
-
-**Generated Prompt Example:**
-```markdown
-# My Data Agent
-
-Analyzes sales data and generates insights
-
-## Your Role
-You are My Data Agent, a specialized data analyst that processes CSV files, performs statistical analysis...
-
-## Capabilities
-### Core Tools
-- **read_csv**: Parse CSV files with configurable delimiters
-- **analyze_data**: Perform descriptive, correlation, regression analysis
-...
-
-## Primary Objectives
-Generate weekly sales insights with trend analysis
-
-### Target Audience
-You are designed to serve: Sales managers, Marketing analysts
-
-## Interaction Guidelines
-Be direct and efficient. Focus on completing tasks with minimal back-and-forth...
-
-## Success Metrics
-Your performance will be measured by:
-- Accuracy of statistical analysis
-- Speed of report generation
-...
-```
-
-**3. ConfigGenerator (`src/lib/generation/config-generator.ts`)**
-
-Generates all project configuration files for a complete agent project.
-
-**Methods:**
-- `generateAgentConfigJSON(options)` → `agent.config.json` with:
-  - Agent metadata (name, version, template)
-  - Model configuration (MiniMax-M2, API settings)
-  - Tool configurations and capabilities
-  - MCP server configurations
-  - Environment and deployment settings
-- `generateEnvFile(options)` → `.env.example` with:
-  - MiniMax JWT token placeholder
-  - Template-specific environment variables
-  - MCP server authentication settings
-- `generatePackageJSON(options)` → `package.json` with:
-  - Project metadata and scripts
-  - Claude Agent SDK + template dependencies
-  - Dev dependencies (TypeScript, Vitest, ESLint)
-  - Proper ESM configuration
-- `generateTSConfig()` → `tsconfig.json` with:
-  - ES2022 target, Node module resolution
-  - Strict TypeScript settings
-  - Source maps and declarations
-- `generateREADME(options)` → `README.md` with:
-  - Project overview and features
-  - Tool documentation
-  - Installation and usage instructions
-  - Implementation steps and success metrics
-- `generateImplementationGuide(options)` → `IMPLEMENTATION.md` with:
-  - Quick start checklist
-  - Implementation roadmap with status tracking
-  - Testing strategy
-  - Deployment checklist
-
-**Options:**
-```typescript
-{
-  templateId: string,
-  agentName: string,
-  projectName?: string,           // Default: kebab-case agent name
-  requirements: AgentRequirements,
-  recommendations?: AgentRecommendations
-}
-```
-
-**4. Generation Tools (`src/lib/generation/tool-handlers.ts`)**
-
-Three Claude Agent SDK tools for the generation phase:
-
-**IMPORTANT**: All generation tools return **Markdown-formatted documents** with code fences, file headers, and copy instructions. They NEVER write files directly.
-
-**`generate_agent_code`**
-- Input: `templateId`, `agentName`, options (comments, error handling, sample usage)
-- Output: **Markdown document** containing:
-  - TypeScript code in ` ```typescript ` fence
-  - File header: `### File: src/index.ts`
-  - Copy instructions: `**To use**: Copy the above code to...`
-  - Metadata section with LOC, features
-  - Next steps section
-
-**`generate_system_prompt`**
-- Input: `templateId`, `requirements`, options (examples, constraints, verbosity)
-- Output: **Markdown document** containing:
-  - System prompt in ` ```markdown ` fence
-  - File header: `### File: system-prompt.md`
-  - Copy instructions for integration
-  - Metadata: word count, sections, verbosity level
-  - Next steps section
-
-**`generate_config_files`**
-- Input: `templateId`, `agentName`, `requirements`, `recommendations`, `files[]`
-- `files` options: `'agent-config'`, `'env'`, `'package'`, `'tsconfig'`, `'readme'`, `'implementation-guide'`
-- Output: **Markdown document** containing:
-  - Multiple code blocks (one per file) with appropriate language tags
-  - File headers for each: `### File: package.json`
-  - Copy instructions for each file
-  - "Files Generated Summary" section listing all files
-  - Next steps section
+- **Tool Name:** `generate_planning_document`
+- **Input Schema:** `{ templateId, agentName, requirements, recommendations }`
+- **Output:** Markdown with a single file header (`docs/planning.md`), the planning document code fence, and numbered next steps for distribution.
+- **Validation:** Uses shared Zod schemas for requirements and recommendations; returns structured tool errors when inputs fail validation.
 
 #### Module Usage
 ```typescript
-import {
-  CodeGenerator,
-  PromptGenerator,
-  ConfigGenerator,
-  createGenerateAgentCodeTool,
-  createGenerateSystemPromptTool,
-  createGenerateConfigFilesTool
-} from './lib/generation';
+import { PlanningDocumentGenerator, createGeneratePlanningDocumentTool } from './lib/documentation/index.js';
 
-// Create tools for Claude Agent SDK
-const codeTool = createGenerateAgentCodeTool();
-const promptTool = createGenerateSystemPromptTool();
-const configTool = createGenerateConfigFilesTool();
-
-// Or use generators directly
-const codeGen = new CodeGenerator();
-const code = codeGen.generateFullCode({
+// Use the generator directly
+const generator = new PlanningDocumentGenerator();
+const markdown = generator.generate({
   templateId: 'data-analyst',
-  agentName: 'SalesAnalyzer',
-  includeComments: true,
-  includeErrorHandling: true
+  agentName: 'Sales Insights Advisor',
+  requirements,
+  recommendations,
 });
 
-const promptGen = new PromptGenerator();
-const prompt = promptGen.generateDetailed({
-  templateId: 'data-analyst',
-  requirements: {...}
-});
-
-const configGen = new ConfigGenerator();
-const files = {
-  'package.json': configGen.generatePackageJSON(options),
-  '.env.example': configGen.generateEnvFile(options),
-  'README.md': configGen.generateREADME(options),
-  'IMPLEMENTATION.md': configGen.generateImplementationGuide(options)
-};
+// Register the MCP tool
+const planningTool = createGeneratePlanningDocumentTool();
 ```
 
 ## Complete Advisor Workflow
 
-The agent advisor follows this end-to-end workflow using all four modules:
+The advisor now follows a streamlined three-phase process focused on requirements and documentation:
 
 ### Phase 1: Interview (Requirements Gathering)
 **Tool:** `ask_interview_question`
-- Start session → Collect 15 answers across 4 stages
-- Output: Complete `AgentRequirements` object
+- Start a new session and collect all 15 responses across four stages.
+- Output: Complete `AgentRequirements` object, validated and ready for scoring.
 
 ### Phase 2: Classification (Template Matching)
 **Tool:** `classify_agent_type`
-- Input: `AgentRequirements` from interview
-- Scoring: Analyze all 5 templates with multi-factor scoring
-- Output: `AgentRecommendations` with:
-  - Best template match + confidence score
-  - Up to 3 alternative templates
-  - Customized system prompt
-  - Required dependencies and MCP servers
-  - Complexity assessment (low/medium/high)
-  - Implementation roadmap (8-12 steps)
+- Input: `AgentRequirements` from the interview.
+- Scoring: Evaluates all five templates, producing confidence, reasoning, and implementation steps.
+- Output: `AgentRecommendations` with dependencies, MCP server suggestions, complexity, and roadmap guidance.
 
-### Phase 3: Generation (Project Creation)
-**Tools:** `generate_agent_code`, `generate_system_prompt`, `generate_config_files`
-- Generate complete TypeScript implementation
-- Customize system prompt with requirements
-- Create all project configuration files
-- Output: Production-ready agent project
-
-### Phase 4: Export (Package & Deliver)
-**Module:** `src/lib/export/` ✅ (Completed)
-- `generate_implementation_guide` tool for detailed setup instructions
-- **Returns Markdown document** with IMPLEMENTATION.md and README.md in code fences
-- Implementation guide generator with phase-based checklists
-- Deployment and testing guidance
-- File headers, copy instructions, and metadata included
+### Phase 3: Documentation (Planning Deliverable)
+**Tool:** `generate_planning_document`
+- Input: Template selection, requirements, and recommendations.
+- Output: A single Markdown planning brief that consolidates architecture, phases, security, and deployment guidance for human execution.
 
 ### ✅ Phase 5 - Main Advisor Agent (Completed)
 The main advisor agent orchestrates the entire workflow through streaming tool calls.
@@ -729,10 +586,10 @@ The main advisor agent orchestrates the entire workflow through streaming tool c
 #### Core Components
 
 **1. Advisor Agent (`src/advisor-agent.ts`)**
-- **`createAdvisorMcpServer()`** - Registers all 6 tools via MCP server
+- **`createAdvisorMcpServer()`** - Registers three documentation-focused tools via MCP server
   - Uses `createSdkMcpServer()` from Claude Agent SDK v0.1.30
   - Server name: `'advisor-tools'`
-  - Tools: interview, classification, generation (3), export
+  - Tools: interview, classification, planning document
 - **`runAdvisor(query, options?)`** - Streaming query handler with session tracking
   - **NEW**: Accepts `options?: { sessionId?: string; continueSession?: boolean }`
   - **NEW**: Returns `Promise<{ sessionId: string | null }>` for conversation continuity
@@ -742,14 +599,14 @@ The main advisor agent orchestrates the entire workflow through streaming tool c
   - Streams responses with real-time console output
   - Event handling: assistant messages, tool use, errors
 - **System Prompt** - Comprehensive 67-line prompt defining:
-  - Workflow phases (interview → classify → generate)
+  - Workflow phases (interview → classify → document)
   - Tool usage guidelines
   - Template knowledge (5 templates)
   - Best practices and interaction style
 
 **2. Interactive CLI (`src/cli.ts`)**
 - **`AdvisorCLI`** class for session management with conversation context tracking
-  - Commands: `/help`, `/exit`, `/clear`, `/history`, `/save <filename>`, `/load [sessionId]`, `/status`, `/templates`
+  - Commands: `/help`, `/exit`, `/clear`, `/history`, `/save`, `/load [sessionId]`, `/status`, `/templates`
   - **NEW Session Tracking**:
     - `currentAdvisorSessionId` - Tracks advisor conversation session ID
     - `conversationMessageCount` - Counts messages in current conversation
@@ -769,7 +626,20 @@ The main advisor agent orchestrates the entire workflow through streaming tool c
     - Integrates with `InterviewStateManager.updateConversationMetadata()`
   - **Output Capture**: Automatically captures all streamed responses
   - **Code Fence Detection**: Shows tip message when code blocks are detected
-  - **`/save <filename>`**: Writes last advisor output to Markdown file
+  - **Interactive Save Workflow** (`/save` command):
+    - **Directory Selection**: Choose current dir, create new, enter custom path, or select from available directories
+    - **Directory Filtering**: Excludes hidden dirs, `node_modules`, `dist`, `build`, `.git`, `sessions`
+    - **Directory Sanitization**: Removes invalid chars, replaces spaces with hyphens, clamps length (1-100)
+    - **Filename Input**: Prompts with timestamped default (e.g., `advisor-output-2025-11-02.md`)
+    - **Path Safety**: Validates against traversal, absolute paths, escaping project root
+    - **Overwrite Protection**: Confirms before overwriting existing files
+    - **Success Feedback**: Displays saved path and file size
+    - **Helper Methods** (`src/cli.ts:494-684`):
+      - `prompt(message)` - Generic input prompt using `pendingConfirmation` pattern
+      - `listDirectories(dirPath)` - Lists filtered directories
+      - `createNewDirectory(baseDir, name)` - Creates sanitized directories
+      - `selectDirectory()` - Interactive directory selection menu
+      - `saveWithDirectorySelection()` - Complete save workflow with validation
   - Query handler with streaming mode and session tracking
   - Fallback to batch pipeline when streaming unavailable
   - Session persistence integration
@@ -780,11 +650,15 @@ The main advisor agent orchestrates the entire workflow through streaming tool c
   node dist/advisor-agent.js "your query"       # Direct execution
   ```
 - **Output Workflow:**
-  1. User queries advisor
-  2. Advisor streams Markdown-formatted response
-  3. CLI detects code fences and shows copy tips
-  4. User uses `/save my-agent.md` to persist output
-  5. User copies code from saved Markdown file
+  1. User poses a question to start or continue the engagement.
+  2. Advisor streams Markdown-formatted planning guidance in real time.
+  3. CLI detects code fences and shows copy tips for the generated brief.
+  4. User runs `/save` (interactive workflow):
+     - Select directory (current, create new, custom path, or from list)
+     - Enter filename (or use timestamped default)
+     - Confirm overwrite if file exists
+     - Path safety validation and confirmation if needed
+  5. Delivery team executes the documented plan offline.
 
 **3. MCP Architecture**
 The advisor uses the Model Context Protocol (MCP) for tool registration:
@@ -836,7 +710,7 @@ The interactive CLI provides configurable screen clearing on startup:
 - **Module Exports:**
   - Interview: `src/lib/interview/index.ts`
   - Classification: `src/lib/classification/index.ts`
-  - Generation: `src/lib/generation/index.ts`
+  - Documentation: `src/lib/documentation/index.ts`
   - Templates: `src/templates/index.ts`
 - Session data persists in `sessions/` directory (gitignored).
 - **Conversation Metadata** (`src/types/interview.ts:29-34`):
@@ -867,10 +741,63 @@ The interactive CLI provides configurable screen clearing on startup:
 - All template tools use JSON-serializable configurations (no Zod schemas in runtime data).
 - Import paths use `.js` extensions for ESM compatibility with `module: "NodeNext"`.
 - **Template Spec Compliance:** All templates strictly follow the MVP spec defined in `agent_advisor_mvp-plan.md`. The Data Analyst template schema was updated to remove nested objects (`parseOptions`, `config`, `options`), align field names/types, and ensure classifier/generator compatibility. Never deviate from spec schemas without updating the plan document first.
-- **Markdown-Only Output:** Generation and export tools return Markdown documents, NOT JSON. Never return raw JSON from tool handlers in generation/export modules. System prompt explicitly forbids file operations (Bash, Write, Edit). Users control persistence via CLI `/save` command.
+- **Markdown-Only Output:** The `generate_planning_document` tool returns Markdown, not JSON. Never introduce file operations or non-Markdown responses; the system prompt forbids Bash/Write/Edit actions. Users persist deliverables via the interactive CLI `/save` command.
 - **Task Management Tools Prohibited:** TodoWrite, TodoRead, TodoUpdate, and all task management tools are explicitly forbidden in the advisor's system prompt. These tools create false expectations that the advisor will execute tasks rather than provide documentation. The advisor outputs Markdown documentation with numbered lists for implementation steps. If tasks fail or cannot be executed, the advisor must explicitly clear/cancel any presented todos and replace them with numbered Markdown next-steps lists for users to follow.
 
 ## Recent Improvements
+
+### 2025-11-02: Interactive Save Workflow Enhancement
+**Focus**: Replace command-line argument save with fully interactive directory and filename selection
+
+#### Implementation Details (`src/cli.ts`)
+- ✅ **New Helper Methods**:
+  - `prompt(message)` (lines 494-506) - Generic input prompt using `pendingConfirmation` pattern for consistent user input handling
+  - `listDirectories(dirPath)` (lines 511-525) - Lists directories with filtering (excludes hidden, `node_modules`, `dist`, `build`, `.git`, `sessions`)
+  - `createNewDirectory(baseDir, name)` (lines 530-568) - Creates directories with name sanitization:
+    - Trims whitespace, replaces spaces with hyphens
+    - Removes invalid characters (keeps only alphanumeric, hyphens, underscores)
+    - Strips leading/trailing dots and hyphens
+    - Clamps length to 1-100 characters
+    - Handles already-exists gracefully (EEXIST)
+  - `selectDirectory()` (lines 573-612) - Interactive directory selection menu:
+    - Option 1: Use current directory
+    - Option 2: Create new directory (with sanitization)
+    - Option 3: Enter custom path
+    - Options 4+: Select from available directories list
+  - `saveWithDirectorySelection()` (lines 617-684) - Complete interactive save workflow:
+    - Validates `lastOutput` exists
+    - Calls `selectDirectory()` for directory choice
+    - Prompts for filename with timestamped default (e.g., `advisor-output-2025-11-02.md`)
+    - Auto-appends `.md` extension if missing
+    - Path safety validation (detects traversal, absolute paths, escaping project root)
+    - Confirms before overwriting existing files
+    - Displays success feedback (path and file size)
+
+- ✅ **Command Handler Update** (line 220):
+  - Changed `/save` from `await this.saveSession(args)` to `await this.saveWithDirectorySelection()`
+  - No longer accepts command-line arguments
+  - Fully interactive workflow
+
+- ✅ **Removed Legacy Code**:
+  - Removed `saveSession(args)` method entirely (previously lines 479-541)
+  - Eliminated command-line argument parsing for filename
+  - Cleaned up dead code paths
+
+- ✅ **Documentation Updates**:
+  - Updated help text: `/save <filename>` → `/save` (interactive)
+  - Updated output capture tip: `/save <filename>` → `/save`
+  - Updated workflow example in help text
+  - Updated CLAUDE.md with complete workflow documentation
+  - Updated agents.md with helper method details and workflow steps
+
+#### Benefits
+- ✅ **Better User Experience**: Guided interactive prompts instead of memorizing syntax
+- ✅ **Organized Output**: Easy directory creation and selection for project organization
+- ✅ **Safer Paths**: Continued path safety validation with user confirmation
+- ✅ **Prevents Overwrites**: Explicit confirmation before overwriting files
+- ✅ **Flexible Defaults**: Timestamped filenames prevent accidental name collisions
+- ✅ **Cleaner Codebase**: Removed legacy argument parsing, single responsibility methods
+- ✅ **Consistent UX**: All prompts use same `pendingConfirmation` pattern
 
 ### 2025-11-02: TodoWrite Prohibition Enhancement
 **Focus**: Prevent task management tool usage that conflicts with Markdown-only output philosophy
@@ -962,6 +889,52 @@ The interactive CLI provides configurable screen clearing on startup:
 - ✅ Cleaner codebase with centralized helper functions
 - ✅ Production-safe with validation and clamping
 
+### 2025-11-02: Documentation Generator Test Coverage
+**Focus**: Comprehensive test suite for planning document generation workflow
+
+#### Test Infrastructure Created
+- ✅ **Unit Tests - PlanningDocumentGenerator** (78 tests):
+  - Created `tests/unit/documentation/document-generator.test.ts`
+  - Validates document generation for all 5 templates (Data Analyst, Content Creator, Code Assistant, Research Agent, Automation Agent)
+  - Verifies all 8 required sections present and ordered correctly (Overview, Requirements, Architecture, Phases, Security, Metrics, Risk, Deployment)
+  - Checks heading hierarchy (H1 title, H2 sections)
+  - Ensures no code blocks or code-like patterns in documentation-only output
+  - Tests edge cases: empty implementation steps, no MCP servers, minimal/complex requirements
+  - Validates error handling for invalid template IDs and agent names
+
+- ✅ **Unit Tests - Planning Tool Handler** (45 tests):
+  - Created `tests/unit/documentation/planning-tool.test.ts`
+  - Validates MCP tool configuration (name, description, handler)
+  - Tests comprehensive input validation for all parameters
+  - Verifies Markdown-wrapped output format (file headers, code fences, copy instructions)
+  - Checks error handling and Markdown error formatting
+  - Ensures successful generation for all 5 templates
+  - Validates Next Steps section presence and structure
+
+- ✅ **E2E Tests - Documentation Workflow** (61 tests):
+  - Created `tests/e2e/document-generation.test.ts`
+  - Tests complete workflow: Requirements → Classification → Planning Document Generation
+  - Validates cross-template consistency (all templates produce same structure)
+  - Ensures unique content per template
+  - Tests edge cases with minimal and complex requirements
+  - Validates integration between AgentClassifier and PlanningDocumentGenerator
+  - Verifies no code blocks in final documentation output
+
+#### Legacy Template Compatibility
+- ✅ **Added AgentTemplate Exports**: Added backward-compatible legacy exports to all 5 template files
+  - `dataAnalystTemplate` in `src/templates/data-analyst.ts`
+  - `contentCreatorTemplate` in `src/templates/content-creator.ts`
+  - `codeAssistantTemplate` in `src/templates/code-assistant.ts`
+  - `researchAgentTemplate` in `src/templates/research-agent.ts`
+  - `automationAgentTemplate` in `src/templates/automation-agent.ts`
+  - Enables PlanningDocumentGenerator to access required fields (capabilityTags, recommendedIntegrations)
+  - Maintains compatibility with existing classification and generation workflows
+
+#### Test Results
+- ✅ **All Documentation Tests Passing**: 184/184 (100%)
+- ✅ **Coverage Areas**: Section structure, heading hierarchy, code block absence, edge cases, error handling, cross-template consistency
+- ✅ **Benefits**: Ensures planning documents maintain consistent quality, validates documentation-first workflow, prevents code generation drift
+
 ### 2025-11-02: Export Test Refactoring
 **Focus**: Eliminated test flakiness, improved reliability, better documentation
 
@@ -995,9 +968,13 @@ The interactive CLI provides configurable screen clearing on startup:
   - Clear path forward for re-enabling parallelism after stabilization
 
 #### Test Results
-- ✅ **Export Tests**: 20/20 passing (100%) - fully stabilized
-- ✅ **Unit Tests Overall**: 105/112 passing (94%, up from 82%)
-- ✅ **Remaining Issues**: 7 tests (interview validator: 2, state-manager: 5)
+- ✅ **Documentation Tests**: 184/184 passing (100%) - comprehensive coverage added
+  - Unit tests for PlanningDocumentGenerator: 78/78 passing
+  - Unit tests for planning tool handler: 45/45 passing
+  - E2E documentation workflow tests: 61/61 passing
+- ✅ **Export Tests**: 20/20 passing (100%) - fully stabilized (retired in favor of documentation-first workflow)
+- ✅ **Unit Tests Overall**: See individual module test suites
+- **Note**: Legacy export suite retired; focus shifted to documentation-first workflow
 
 ### 2025-11-01: Test Suite Fixes
 **Focus**: Validation system alignment and API improvements
@@ -1026,17 +1003,14 @@ For complete tool documentation including parameter specifications, return forma
 
 ### Quick Reference
 
-**6 Tools in Workflow**:
+**3 Tools in Workflow**:
 1. **`ask_interview_question`** - Interactive interview (JSON) - `src/lib/interview/tool-handler.ts`
 2. **`classify_agent_type`** - Template matching (JSON) - `src/lib/classification/tool-handler.ts`
-3. **`generate_agent_code`** - TypeScript implementation (Markdown) - `src/lib/generation/tool-handlers.ts`
-4. **`generate_system_prompt`** - Customized prompt (Markdown) - `src/lib/generation/tool-handlers.ts`
-5. **`generate_config_files`** - Project configuration (Markdown) - `src/lib/generation/tool-handlers.ts`
-6. **`generate_implementation_guide`** - Setup documentation (Markdown) - `src/lib/export/tool-handler.ts`
+3. **`generate_planning_document`** - Planning brief (Markdown) - `src/lib/documentation/tool-handler.ts`
 
 **Output Format Key**:
 - **JSON**: Interview and classification (structured data)
-- **Markdown**: Generation and export (code fences with copy instructions)
+- **Markdown**: Planning brief (single code fence with copy instructions)
 
 See [TOOLS.md](./TOOLS.md) for detailed specifications.
 
@@ -1046,34 +1020,21 @@ See [TOOLS.md](./TOOLS.md) for detailed specifications.
 |-------|-----------|---------|-------|---------------|
 | Interview | `ask_interview_question` | Gather requirements | action (start\|answer\|skip\|resume\|status), sessionId?, response? | JSON (questions/requirements) |
 | Classification | `classify_agent_type` | Recommend template | requirements (AgentRequirements), includeAlternatives? (default: true) | JSON (status, classification, recommendations, alternatives, nextSteps) |
-| Generation | `generate_agent_code` | Create implementation | templateId, agentName, options | **Markdown** with TypeScript code fence |
-| Generation | `generate_system_prompt` | Customize prompt | templateId, requirements, options | **Markdown** with prompt code fence |
-| Generation | `generate_config_files` | Create project files | templateId, agentName, requirements | **Markdown** with multiple file code fences |
-| Export | `generate_implementation_guide` | Create setup guide | templateId, agentName, requirements | **Markdown** with guide/README code fences |
+| Documentation | `generate_planning_document` | Produce planning brief | templateId, agentName, requirements, recommendations | **Markdown** single-file planning document |
 
-### Output Format Changes (Phase 4-5)
+### Output Format Notes
 
-**Generation & Export Tools**: All return Markdown documents instead of JSON:
-- **Code Fences**: Proper language tags (typescript, json, markdown, bash, env)
-- **File Headers**: Each code block has `### File: filename`
-- **Copy Instructions**: Each block followed by `**To use**: Copy the above...`
-- **Metadata Sections**: Include LOC, file counts, generation timestamps
-- **Next Steps**: Clear actionable guidance
-- **Error Format**: Errors also as Markdown with `## Error` heading and troubleshooting
-
-**Benefits**:
-- ✅ No file operations - safe, reviewable output
-- ✅ User controls when/where to persist code
-- ✅ Easy copy-paste from formatted Markdown
-- ✅ Portable output that works anywhere
+**Planning Document Tool**:
+- **Code Fence**: Uses ```markdown for the entire brief.
+- **File Header**: Always emits `### File: docs/planning.md`.
+- **Copy Instructions**: Follows the fence with `**To use**: Copy the above Markdown to docs/planning.md`.
+- **Next Steps**: Ends with numbered guidance for handoff.
+- **Error Format**: Failures render Markdown with `## Error` headings and troubleshooting tips.
 
 All tools are registered via MCP server and follow Claude Agent SDK patterns with:
 - Zod input schemas for type safety and validation
-- Markdown-formatted outputs for generation/export tools
+- Markdown-formatted outputs for documentation tooling
 - JSON outputs for interview/classification tools
-- Comprehensive error handling with context details
-- Tool metadata (descriptions, permissions)
-- Registered through `createSdkMcpServer()` in advisor agent
 
 ## Quality Checklist
 - ✅ Run `npm run build` and relevant tests prior to handoff.

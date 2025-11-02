@@ -50,7 +50,6 @@ export interface AgentRecommendations {
   requiredDependencies: string[];
   mcpServers: MCPServerConfiguration[];
   systemPrompt: string;
-  starterCode: string;
   toolConfigurations: ToolConfiguration[];
   estimatedComplexity: 'low' | 'medium' | 'high';
   implementationSteps: string[];

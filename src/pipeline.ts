@@ -5,32 +5,17 @@ import type {
 import type { Response } from './types/interview.js';
 import { InterviewStateManager } from './lib/interview/state-manager.js';
 import { AgentClassifier } from './lib/classification/classifier.js';
-import { CodeGenerator } from './lib/generation/code-generator.js';
-import { PromptGenerator } from './lib/generation/prompt-generator.js';
-import { ConfigGenerator } from './lib/generation/config-generator.js';
-import { AgentPackager, type PackageResult } from './lib/export/packager.js';
+import { PlanningDocumentGenerator } from './lib/documentation/document-generator.js';
 
 export interface PipelineOptions {
-  outputDir?: string;
-  autoPackage?: boolean;
-  includeExamples?: boolean;
-  includeTests?: boolean;
   verboseLogging?: boolean;
-  promptVerbosity?: 'concise' | 'standard' | 'detailed';
 }
 
 export interface PipelineResult {
   success: boolean;
   requirements?: AgentRequirements;
   recommendations?: AgentRecommendations;
-  generatedFiles?: {
-    code: string;
-    prompt: string;
-    packageJson: string;
-    readme: string;
-    implementationGuide: string;
-  };
-  packageResult?: PackageResult;
+  planningDocument?: string;
   errors?: string[];
   warnings?: string[];
 }
@@ -47,18 +32,12 @@ export interface InteractiveCallbacks {
 export class AgentGenerationPipeline {
   private interviewManager: InterviewStateManager;
   private classifier: AgentClassifier;
-  private codeGenerator: CodeGenerator;
-  private promptGenerator: PromptGenerator;
-  private configGenerator: ConfigGenerator;
-  private packager: AgentPackager;
+  private documentGenerator: PlanningDocumentGenerator;
 
   constructor() {
     this.interviewManager = new InterviewStateManager();
     this.classifier = new AgentClassifier();
-    this.codeGenerator = new CodeGenerator();
-    this.promptGenerator = new PromptGenerator();
-    this.configGenerator = new ConfigGenerator();
-    this.packager = new AgentPackager();
+    this.documentGenerator = new PlanningDocumentGenerator();
   }
 
   /**
@@ -69,12 +48,7 @@ export class AgentGenerationPipeline {
     options: PipelineOptions = {}
   ): Promise<PipelineResult> {
     const {
-      outputDir = './generated-agents',
-      autoPackage = true,
-      includeExamples = true,
-      includeTests = false,
       verboseLogging = false,
-      promptVerbosity = 'detailed',
     } = options;
 
     const errors: string[] = [];
@@ -127,96 +101,24 @@ export class AgentGenerationPipeline {
         return { success: false, requirements, errors };
       }
 
-      // Step 5: Generate code
+      // Step 5: Generate planning document
       if (verboseLogging) {
-        console.log(`Step 5: Generating code for ${recommendations.agentType}...`);
+        console.log('Step 5: Generating planning document...');
       }
 
-      const code = this.codeGenerator.generateFullCode({
-        templateId: recommendations.agentType,
-        agentName: requirements.name,
-        includeComments: true,
-        includeErrorHandling: true,
-        includeSampleUsage: includeExamples,
-      });
-
-      // Step 6: Generate system prompt
-      if (verboseLogging) {
-        console.log('Step 6: Generating system prompt...');
-      }
-
-      const prompt = this.promptGenerator.generate({
-        templateId: recommendations.agentType,
-        requirements,
-        verbosityLevel: promptVerbosity,
-      });
-
-      // Step 7: Generate configuration files
-      if (verboseLogging) {
-        console.log('Step 7: Generating configuration files...');
-      }
-
-      const packageJson = this.configGenerator.generatePackageJSON({
-        templateId: recommendations.agentType,
-        agentName: requirements.name,
-        requirements,
-      });
-
-      const readme = this.configGenerator.generateREADME({
+      const planningDocument = this.documentGenerator.generate({
         templateId: recommendations.agentType,
         agentName: requirements.name,
         requirements,
         recommendations,
       });
-
-      const implementationGuide = this.configGenerator.generateImplementationGuide({
-        templateId: recommendations.agentType,
-        agentName: requirements.name,
-        requirements,
-        recommendations,
-      });
-
-      const generatedFiles = {
-        code,
-        prompt,
-        packageJson, // Already a JSON string from generatePackageJSON
-        readme,
-        implementationGuide,
-      };
-
-      // Step 8: Package agent (if requested)
-      let packageResult: PackageResult | undefined;
-
-      if (autoPackage) {
-        if (verboseLogging) {
-          console.log('Step 8: Packaging agent project...');
-        }
-
-        const agentOutputDir = `${outputDir}/${requirements.name.toLowerCase().replace(/\s+/g, '-')}`;
-
-        packageResult = await this.packager.packageAgent({
-          outputDir: agentOutputDir,
-          agentName: requirements.name,
-          templateId: recommendations.agentType,
-          requirements,
-          recommendations,
-          includeExamples,
-          includeTests,
-          includeDocumentation: true,
-        });
-
-        if (!packageResult.success && packageResult.errors) {
-          warnings.push(...packageResult.errors);
-        }
-      }
 
       // Step 9: Return complete result
       return {
         success: true,
         requirements,
         recommendations,
-        generatedFiles,
-        packageResult,
+        planningDocument,
         warnings: warnings.length > 0 ? warnings : undefined,
       };
     } catch (error) {

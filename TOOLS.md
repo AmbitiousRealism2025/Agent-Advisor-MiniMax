@@ -1,16 +1,12 @@
 # Tool Reference Documentation
 
-Comprehensive reference for all advisor agent tools. This documentation provides parameter specifications, return formats, and usage examples for the 6 tools used in the agent workflow.
+Comprehensive reference for all advisor agent tools. This documentation provides parameter specifications, return formats, and usage examples for the three tools used in the documentation-first workflow.
 
 ## Table of Contents
 
 1. [Interview Tool](#interview-tool-ask_interview_question)
 2. [Classification Tool](#classification-tool-classify_agent_type)
-3. [Generation Tools](#generation-tools)
-   - [Generate Agent Code](#generate_agent_code)
-   - [Generate System Prompt](#generate_system_prompt)
-   - [Generate Config Files](#generate_config_files)
-4. [Export Tool](#export-tool-generate_implementation_guide)
+3. [Planning Document Tool](#planning-document-tool-generate_planning_document)
 
 ---
 
@@ -165,261 +161,98 @@ const recommendations = classificationResult.recommendations;
 
 ---
 
-## Generation Tools
+## Planning Document Tool: `generate_planning_document`
 
-All generation tools return **Markdown-formatted documents** with code blocks, file headers, and copy instructions.
+**Purpose**: Produces the comprehensive Markdown planning brief that replaces automated code and configuration generation. The document captures architecture, phased delivery, security, metrics, risks, and deployment guidance for the selected template.
 
-### `generate_agent_code`
-
-**Purpose**: Generates complete TypeScript implementation for the agent based on the selected template.
-
-**Implementation**: `src/lib/generation/tool-handlers.ts:GenerateAgentCodeHandler`
-
-#### Parameters
-
-- **`templateId`** (required): One of: `"data-analyst"`, `"content-creator"`, `"code-assistant"`, `"research-agent"`, `"automation-agent"`
-- **`agentName`** (required): Display name for the agent (supports spaces, hyphens, underscores)
-- **`includeComments`** (optional): Add explanatory comments to code (default: `true`)
-- **`includeErrorHandling`** (optional): Add try-catch blocks and error management (default: `true`)
-- **`includeSampleUsage`** (optional): Add usage examples at end of file (default: `true`)
-
-#### Return Format (Markdown)
-
-```markdown
-## Agent Code Generated
-
-### File: `src/index.ts`
-
-\```typescript
-import { createMcpServer } from '@anthropic-ai/claude-agent-sdk';
-// ... generated code
-\```
-
-**To use**: Copy the above code to `src/index.ts` in your project directory.
-
-## Code Metadata
-
-- **Template**: data-analyst
-- **Agent Name**: Sales Data Analyzer
-- **Lines of Code**: 250
-- **Features Included**:
-  - Comments: Yes
-  - Error Handling: Yes
-  - Sample Usage: Yes
-
-## Next Steps
-
-1. Create your project directory
-2. Copy code to `src/index.ts`
-3. Install dependencies with `npm install`
-4. Configure environment variables
-```
-
----
-
-### `generate_system_prompt`
-
-**Purpose**: Generates customized system prompt tailored to the agent's specific requirements and template.
-
-**Implementation**: `src/lib/generation/tool-handlers.ts:GenerateSystemPromptHandler`
-
-#### Parameters
-
-- **`templateId`** (required): Template identifier
-- **`requirements`** (required): Full `AgentRequirements` from interview
-- **`includeExamples`** (optional): Include usage examples in prompt (default: `true`)
-- **`includeConstraints`** (optional): Include behavior constraints (default: `true`)
-- **`verbosityLevel`** (optional): One of: `"concise"`, `"standard"`, `"detailed"` (default: `"standard"`)
-
-#### Return Format (Markdown)
-
-```markdown
-## System Prompt Generated
-
-### File: `system-prompt.md`
-
-\```markdown
-# Sales Data Analyzer System Prompt
-
-You are a specialized data analysis agent...
-
-## Core Capabilities
-- CSV processing and validation
-- Statistical analysis
-...
-\```
-
-**To use**: Copy the above prompt to your agent's system prompt configuration.
-
-## Prompt Metadata
-
-- **Template**: data-analyst
-- **Agent Name**: Sales Data Analyzer
-- **Word Count**: 450
-- **Sections**: 5
-- **Verbosity Level**: standard
-- **Generated At**: 2025-11-02T16:30:00.000Z
-
-## Next Steps
-
-1. Review the generated system prompt carefully
-2. Customize specific sections to match project needs
-3. Update your agent configuration with the prompt
-```
-
----
-
-### `generate_config_files`
-
-**Purpose**: Generates all configuration files needed for the project: `package.json`, `tsconfig.json`, `.env.example`.
-
-**Implementation**: `src/lib/generation/tool-handlers.ts:GenerateConfigFilesHandler`
-
-#### Parameters
-
-- **`templateId`** (required): Template identifier
-- **`agentName`** (required): Agent display name
-- **`requirements`** (required): Full `AgentRequirements` from interview
-- **`files`** (optional): Array specifying which files to generate
-  - Options: `["package", "tsconfig", "env", "gitignore"]`
-  - Default: `["package", "tsconfig", "env"]`
-
-#### Return Format (Markdown)
-
-```markdown
-## Configuration Files Generated
-
-### File: `package.json`
-
-\```json
-{
-  "name": "sales-data-analyzer",
-  "version": "1.0.0",
-  "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^1.0.0",
-    "csv-parse": "^5.5.0"
-  }
-}
-\```
-
-**To use**: Copy the above content to `package.json` in your project root.
-
-### File: `tsconfig.json`
-
-\```json
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext"
-  }
-}
-\```
-
-**To use**: Copy the above content to `tsconfig.json` in your project root.
-
-### File: `.env.example`
-
-\```bash
-MINIMAX_JWT_TOKEN=your_jwt_token_here
-LOG_LEVEL=info
-\```
-
-**To use**: Copy the above content to `.env.example` in your project root.
-
-## Generation Metadata
-
-- **Template**: data-analyst
-- **Agent Name**: Sales Data Analyzer
-- **Files Generated**: 3
-- **Generated At**: 2025-11-02T16:30:00.000Z
-
-## Next Steps
-
-1. Create a new project directory
-2. Copy each file above to its specified location
-3. Run `npm install` to install dependencies
-4. Copy `.env.example` to `.env` and configure credentials
-```
-
----
-
-## Export Tool: `generate_implementation_guide`
-
-**Purpose**: Generates comprehensive implementation guide (`IMPLEMENTATION.md`) and project README (`README.md`) with step-by-step instructions.
-
-**Implementation**: `src/lib/export/tool-handler.ts`
+**Implementation**: `src/lib/documentation/tool-handler.ts`
 
 ### Parameters
 
-- **`templateId`** (required): Template identifier
-- **`agentName`** (required): Agent display name
-- **`requirements`** (required): Full `AgentRequirements` from interview
-- **`recommendations`** (required): `AgentRecommendations` from classification phase
-  - Type: Object with fields: `agentType`, `requiredDependencies`, `mcpServers`, `systemPrompt`, `starterCode`, `toolConfigurations`, `estimatedComplexity`, `implementationSteps`
-- **`includeReadme`** (optional): Generate README.md file (default: `true`)
-- **`includeExamples`** (optional): Include usage examples in guide (default: `true`)
+- **`templateId`** (required): Template identifier (`"data-analyst"`, `"content-creator"`, `"code-assistant"`, `"research-agent"`, `"automation-agent"`).
+- **`agentName`** (required): Display name for the agent. Must be at least three characters and start with a letter or underscore.
+- **`requirements`** (required): Complete `AgentRequirements` object from the interview phase.
+- **`recommendations`** (required): `AgentRecommendations` object returned by `classify_agent_type`.
 
 ### Return Format (Markdown)
 
 ```markdown
-## Implementation Guide
+## Planning Document
 
-### File: `IMPLEMENTATION.md`
+### File: `docs/planning.md`
 
 \```markdown
-# Sales Data Analyzer - Implementation Guide
+# Sales Insights Advisor Planning Document
 
 ## Overview
-Comprehensive step-by-step guide to implement your agent...
+- **Agent Name:** Sales Insights Advisor
+- **Template:** data-analyst (`data-analyst`)
+- **Primary Outcome:** Weekly revenue trend insights
+- **Target Audience:** Sales leadership, finance analysts
+- **Interaction Style:** task-focused
+- **Delivery Channels:** cli
+- **Estimated Complexity:** medium
+- **Recommended MCP Servers:** `filesystem`, `web-fetch`
+- **Planned Tooling:** read_csv, analyze_data, generate_visualization, export_report
 
-## Phase 1: Project Setup
-1. Create project directory
-2. Initialize npm project
-3. Install dependencies
+## Requirements
+- **Description:** Automate weekly reporting for sales leadership...
+- **Success Metrics:**
+- Improve forecast accuracy by 10%
+- Reduce manual report time by 50%
+- **Constraints:**
+- Must operate without database access
+- **Preferred Technologies:**
+- Node.js 18+
+- **Capability Expectations:** Memory: short-term | File Access: required | Web Access: required | Code Execution: not required | Data Analysis: required | Tool Integrations: salesforce, tableau
+- **Additional Notes:** Coordinate with data governance for export approvals
 
-## Phase 2: Core Implementation
-...
+## Architecture
+- **Core Capabilities:**
+- data-processing
+- analytics
+- reporting
+- **Default Tools:**
+1. **read_csv** - Parse CSV files with configurable delimiter support
+2. **analyze_data** - Perform descriptive, correlation, regression analysis
+3. **generate_visualization** - Render charts via Chart.js
+4. **export_report** - Produce Markdown or HTML reports
+- **Integration Targets:**
+  - Salesforce, Tableau
+
+... (Sections: Phases, Security, Metrics, Risk, Deployment)
 \```
 
-**To use**: Copy the above content to `IMPLEMENTATION.md` in your project root.
-
-### File: `README.md`
-
-\```markdown
-# Sales Data Analyzer
-
-Analyzes sales data and generates insights...
-
-## Features
-- CSV processing
-- Statistical analysis
-
-## Quick Start
-\```bash
-npm install
-npm run dev
-\```
-\```
-
-**To use**: Copy the above content to `README.md` for project documentation.
-
-## Files Generated
-
-1. `IMPLEMENTATION.md` – Detailed build and rollout guide
-2. `README.md` – Project overview and quick start
-
-## Generation Metadata
-
-- **Template**: data-analyst
-- **Agent Name**: Sales Data Analyzer
-- **Generated At**: 2025-11-02T16:30:00.000Z
-- **Files Created**: 2
+**To use**: Copy the above Markdown to `docs/planning.md` within your project workspace.
 
 ## Next Steps
 
-1. Review IMPLEMENTATION.md for detailed setup instructions
-2. Follow the roadmap to implement required tools and integrations
-3. Update README.md with project-specific details
+1. Review the planning brief with stakeholders.
+2. Confirm owners and target timelines for each phase.
+3. Execute the roadmap with human oversight.
+```
+
+### Error Format (Markdown)
+
+Errors are returned as Markdown with context and troubleshooting tips:
+
+```markdown
+## Error
+
+Invalid template ID: invalid-template-xyz
+
+**Error Code**: `INVALID_TEMPLATE`
+
+### Error Details
+
+- **Field**: `templateId`
+- **Valid Values**: `data-analyst`, `content-creator`, `code-assistant`, `research-agent`, `automation-agent`
+
+### Troubleshooting
+
+- Verify the template ID returned by `classify_agent_type`
+- Template IDs are case-sensitive and use kebab-case
+- Supported templates: data-analyst, content-creator, code-assistant, research-agent, automation-agent
 ```
 
 ---
@@ -434,7 +267,8 @@ All tools use structured error responses with error codes and troubleshooting gu
 - `INVALID_AGENT_NAME`: Agent name is empty or invalid
 - `INVALID_REQUIREMENTS`: Requirements object missing required fields
 - `SESSION_NOT_FOUND`: Interview session ID not found
-- `GENERATION_FAILED`: Generation process encountered an error
+- `VALIDATION_ERROR`: Input failed schema validation
+- `INTERNAL_ERROR`: Unexpected failure inside tool handler
 
 ### Error Response Format (JSON)
 
@@ -455,7 +289,7 @@ Interview and classification tools return errors as JSON:
 }
 ```
 
-Generation and export tools return errors as Markdown:
+`generate_planning_document` returns errors as Markdown:
 
 ```markdown
 ## Error
@@ -491,20 +325,12 @@ Typical advisor workflow uses tools in this sequence:
    - Input: Requirements from interview
    - Returns: Recommended template + `AgentRecommendations`
 
-3. **Generation** (3 tools in parallel):
-   - `generate_agent_code`: TypeScript implementation
-   - `generate_system_prompt`: Customized prompt
-   - `generate_config_files`: Project configuration files
-
-4. **Export** (`generate_implementation_guide`): Comprehensive documentation
-   - Input: Requirements + Recommendations + Generated files
-   - Returns: IMPLEMENTATION.md + README.md
-
----
-
+3. **Documentation** (`generate_planning_document`): Produce planning brief
+   - Input: Template ID + Agent Name + Requirements + Recommendations
+   - Returns: Markdown planning document (`docs/planning.md`)
 ## Template Options
 
-All generation tools support these 5 templates:
+All tools support these 5 templates:
 
 1. **`data-analyst`**: CSV processing, statistics, visualization, reporting
 2. **`content-creator`**: Blog posts, SEO optimization, multi-platform formatting
@@ -517,7 +343,7 @@ Each template provides:
 - Template-specific system prompt
 - Recommended dependencies and MCP servers
 - Implementation best practices
-- Sample usage code
+- Planning considerations captured in the documentation phase
 
 ---
 

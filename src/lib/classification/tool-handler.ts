@@ -154,10 +154,10 @@ class ClassifyAgentTypeHandler {
           reasoning: alt.reasoning
         })),
         nextSteps: [
-          'Review the recommended template and tools',
-          'Use generate_agent_code tool to create starter code',
-          'Use generate_system_prompt tool to customize the system prompt',
-          'Use generate_config_files tool to create project configuration'
+          'Review the recommended template and capability alignment',
+          'Use generate_planning_document tool to create the full project plan',
+          'Share the planning document with stakeholders for validation',
+          'Execute the implementation plan with human oversight'
         ],
         notes: recommendations.notes
       };

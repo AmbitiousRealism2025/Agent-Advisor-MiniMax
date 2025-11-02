@@ -1,533 +1,255 @@
-import { z } from 'zod';
-import { createTemplate, type ToolSchemaDefinition } from './template-types.js';
+import { createDocumentTemplate } from './template-types.js';
+import { SECTION_TEMPLATES } from './sections/index.js';
+import type { DocumentTemplate } from './template-types.js';
 
 /**
- * Automation Agent Template
- * Specializes in task orchestration, workflow automation, and scheduled execution
+ * Automation Agent Document Template
+ * Specializes in task scheduling, workflow orchestration, queue management, and process automation
  */
 
-// Tool 1: schedule_task
-const scheduleTaskTool: ToolSchemaDefinition = {
-  name: 'schedule_task',
-  description: 'Schedule a task for future execution with cron-like syntax',
-  zodSchema: z.object({
-    taskId: z.string().describe('Unique identifier for the task'),
-    taskName: z.string().describe('Human-readable task name'),
-    schedule: z.string().describe('Cron expression or time specification (e.g., "0 9 * * *" for daily at 9am)'),
-    action: z.object({
-      type: z.enum(['function', 'workflow', 'api-call', 'command']).describe('Type of action to execute'),
-      target: z.string().describe('Function name, workflow ID, API endpoint, or command'),
-      parameters: z.record(z.any()).optional().describe('Parameters to pass to the action'),
-    }),
-    options: z
-      .object({
-        timezone: z.string().optional().default('UTC'),
-        retryOnFailure: z.boolean().optional().default(true),
-        maxRetries: z.number().optional().default(3),
-        notifyOnComplete: z.boolean().optional().default(false),
-        enabled: z.boolean().optional().default(true),
-      })
-      .optional(),
-  }),
-  requiredPermissions: ['task:schedule'],
-};
-
-// Tool 2: execute_workflow
-const executeWorkflowTool: ToolSchemaDefinition = {
-  name: 'execute_workflow',
-  description: 'Execute a multi-step workflow with conditional logic',
-  zodSchema: z.object({
-    workflowId: z.string().describe('Workflow identifier'),
-    steps: z
-      .array(
-        z.object({
-          stepId: z.string(),
-          name: z.string(),
-          action: z.object({
-            type: z.enum(['function', 'api-call', 'wait', 'conditional', 'parallel']),
-            config: z.record(z.any()),
-          }),
-          onSuccess: z.string().optional().describe('Next step ID on success'),
-          onFailure: z.string().optional().describe('Next step ID on failure'),
-          timeout: z.number().optional().describe('Timeout in seconds'),
-        })
-      )
-      .describe('Ordered workflow steps'),
-    input: z.record(z.any()).optional().describe('Initial workflow input data'),
-    options: z
-      .object({
-        continueOnError: z.boolean().optional().default(false),
-        saveState: z.boolean().optional().default(true),
-        parallelExecution: z.boolean().optional().default(false),
-      })
-      .optional(),
-  }),
-  requiredPermissions: ['task:execute', 'compute'],
-};
-
-// Tool 3: monitor_status
-const monitorStatusTool: ToolSchemaDefinition = {
-  name: 'monitor_status',
-  description: 'Monitor and report on task and workflow execution status',
-  zodSchema: z.object({
-    targets: z
-      .array(
-        z.object({
-          type: z.enum(['task', 'workflow', 'scheduled-job']),
-          id: z.string(),
-        })
-      )
-      .describe('Tasks/workflows to monitor'),
-    options: z
-      .object({
-        includeHistory: z.boolean().optional().default(false).describe('Include execution history'),
-        includeLogs: z.boolean().optional().default(false).describe('Include execution logs'),
-        includeMetrics: z.boolean().optional().default(true).describe('Include performance metrics'),
-        timeRange: z
-          .object({
-            start: z.string().optional(),
-            end: z.string().optional(),
-          })
-          .optional(),
-      })
-      .optional(),
-  }),
-  requiredPermissions: ['task:read'],
-};
-
-// Tool 4: manage_queue
-const manageQueueTool: ToolSchemaDefinition = {
-  name: 'manage_queue',
-  description: 'Manage task queues and job processing',
-  zodSchema: z.object({
-    queueName: z.string().describe('Queue identifier'),
-    operation: z.enum(['create', 'delete', 'pause', 'resume', 'purge', 'list']).describe('Queue operation'),
-    config: z
-      .object({
-        priority: z.number().optional().describe('Queue priority (higher = more important)'),
-        concurrency: z.number().optional().default(1).describe('Max concurrent jobs'),
-        rateLimit: z
-          .object({
-            maxJobs: z.number(),
-            perSeconds: z.number(),
-          })
-          .optional()
-          .describe('Rate limiting configuration'),
-        retryStrategy: z
-          .object({
-            maxAttempts: z.number().default(3),
-            backoffType: z.enum(['fixed', 'exponential', 'linear']).default('exponential'),
-            initialDelay: z.number().default(1000).describe('Initial delay in ms'),
-          })
-          .optional(),
-      })
-      .optional(),
-  }),
-  requiredPermissions: ['queue:manage'],
-};
-
-// System prompt
-const systemPrompt = `You are an expert Automation Agent specializing in task orchestration, workflow automation, and scheduled execution.
-
-Your capabilities include:
-- Scheduling recurring tasks with cron-like expressions
-- Orchestrating complex multi-step workflows with conditional logic
-- Monitoring task execution status and performance metrics
-- Managing task queues with priority and rate limiting
-
-Workflow design principles:
-1. Break complex processes into atomic, reusable steps
-2. Handle errors gracefully with retry logic and fallbacks
-3. Maintain idempotency for safe re-execution
-4. Log comprehensively for debugging and auditing
-5. Use timeouts to prevent hanging operations
-
-Task scheduling best practices:
-- Use appropriate cron expressions for frequency
-- Consider timezone implications for global systems
-- Implement exponential backoff for retries
-- Monitor resource usage and adjust concurrency
-- Maintain visibility with status monitoring and alerts
-
-Error handling strategy:
-- Distinguish between transient and permanent failures
-- Implement circuit breakers for external dependencies
-- Provide clear error messages with actionable context
-- Save workflow state for recovery and resumption
-- Notify appropriate parties on critical failures
-
-Performance optimization:
-- Parallelize independent operations when possible
-- Use appropriate queue priorities
-- Implement rate limiting to prevent overload
-- Cache results when safe and beneficial
-- Monitor and optimize resource utilization
-
-Interaction style:
-- Task-focused and systematic
-- Provide clear status updates and progress tracking
-- Report both successes and failures transparently
-- Suggest optimizations when inefficiencies detected
-- Ask for clarification on error handling preferences
-
-Always prioritize reliability, observability, and graceful degradation in automation workflows.`;
-
-// Starter code
-const starterCode = `import { Agent } from '@anthropic-ai/claude-agent-sdk';
-import { z } from 'zod';
-
-// Workflow execution utilities
-interface WorkflowState {
-  workflowId: string;
-  currentStep: string;
-  data: Record<string, any>;
-  completedSteps: string[];
-  status: 'running' | 'completed' | 'failed' | 'paused';
-  startedAt: Date;
-  errors: any[];
-}
-
-class WorkflowEngine {
-  private workflows: Map<string, WorkflowState> = new Map();
-
-  async executeStep(step: any, state: WorkflowState): Promise<any> {
-    console.log(\`Executing step: \${step.name}\`);
-
-    try {
-      // Simulate step execution based on type
-      switch (step.action.type) {
-        case 'function':
-          return await this.executeFunction(step.action.config, state.data);
-        case 'api-call':
-          return await this.executeApiCall(step.action.config);
-        case 'wait':
-          return await this.executeWait(step.action.config.duration);
-        case 'conditional':
-          return this.evaluateCondition(step.action.config, state.data);
-        default:
-          throw new Error(\`Unknown step type: \${step.action.type}\`);
-      }
-    } catch (error) {
-      console.error(\`Step \${step.name} failed:\`, error);
-      throw error;
-    }
-  }
-
-  private async executeFunction(config: any, data: any): Promise<any> {
-    // Execute a function with provided data
-    return { success: true, result: 'Function executed' };
-  }
-
-  private async executeApiCall(config: any): Promise<any> {
-    // Make an API call
-    return { success: true, result: 'API call completed' };
-  }
-
-  private async executeWait(duration: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, duration));
-  }
-
-  private evaluateCondition(config: any, data: any): boolean {
-    // Evaluate conditional logic
-    return true;
-  }
-}
-
-// Task scheduler (simplified - use node-cron or similar in production)
-class TaskScheduler {
-  private tasks: Map<string, any> = new Map();
-
-  schedule(taskId: string, cronExpression: string, task: any): void {
-    console.log(\`Scheduled task \${taskId} with cron: \${cronExpression}\`);
-    this.tasks.set(taskId, {
-      id: taskId,
-      cron: cronExpression,
-      task,
-      lastRun: null,
-      nextRun: this.calculateNextRun(cronExpression),
-    });
-  }
-
-  private calculateNextRun(cron: string): Date {
-    // Simplified - use cron-parser in production
-    return new Date(Date.now() + 3600000); // 1 hour from now
-  }
-
-  list(): any[] {
-    return Array.from(this.tasks.values());
-  }
-}
-
-const workflowEngine = new WorkflowEngine();
-const scheduler = new TaskScheduler();
-
-// Create the Automation Agent
-const automationAgent = new Agent({
-  baseUrl: 'https://api.minimax.io/anthropic',
-  apiKey: process.env.MINIMAX_JWT_TOKEN!,
-  model: 'MiniMax-M2',
-
-  systemPrompt: \`${systemPrompt}\`,
-
-  tools: [
-    {
-      name: 'schedule_task',
-      description: 'Schedule a task for future execution',
-      input_schema: z.object({
-        taskId: z.string(),
-        taskName: z.string(),
-        schedule: z.string(),
-        action: z.object({
-          type: z.enum(['function', 'workflow', 'api-call', 'command']),
-          target: z.string(),
-          parameters: z.record(z.any()).optional(),
-        }),
-        options: z.object({
-          timezone: z.string().optional().default('UTC'),
-          retryOnFailure: z.boolean().optional().default(true),
-          maxRetries: z.number().optional().default(3),
-          notifyOnComplete: z.boolean().optional().default(false),
-          enabled: z.boolean().optional().default(true),
-        }).optional(),
-      }),
-      handler: async ({ taskId, taskName, schedule, action, options = {} }) => {
-        try {
-          scheduler.schedule(taskId, schedule, { taskName, action, options });
-
-          return {
-            success: true,
-            taskId,
-            taskName,
-            schedule,
-            nextRun: new Date(Date.now() + 3600000).toISOString(),
-            message: \`Task "\${taskName}" scheduled successfully\`,
-          };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Scheduling failed',
-          };
-        }
-      },
-    },
-
-    {
-      name: 'execute_workflow',
-      description: 'Execute a multi-step workflow',
-      input_schema: z.object({
-        workflowId: z.string(),
-        steps: z.array(z.object({
-          stepId: z.string(),
-          name: z.string(),
-          action: z.object({
-            type: z.enum(['function', 'api-call', 'wait', 'conditional', 'parallel']),
-            config: z.record(z.any()),
-          }),
-          onSuccess: z.string().optional(),
-          onFailure: z.string().optional(),
-          timeout: z.number().optional(),
-        })),
-        input: z.record(z.any()).optional(),
-        options: z.object({
-          continueOnError: z.boolean().optional().default(false),
-          saveState: z.boolean().optional().default(true),
-          parallelExecution: z.boolean().optional().default(false),
-        }).optional(),
-      }),
-      handler: async ({ workflowId, steps, input = {}, options = {} }) => {
-        const state: WorkflowState = {
-          workflowId,
-          currentStep: steps[0]?.stepId,
-          data: input,
-          completedSteps: [],
-          status: 'running',
-          startedAt: new Date(),
-          errors: [],
-        };
-
-        try {
-          for (const step of steps) {
-            state.currentStep = step.stepId;
-
-            try {
-              const result = await workflowEngine.executeStep(step, state);
-              state.data = { ...state.data, [\`step_\${step.stepId}_result\`]: result };
-              state.completedSteps.push(step.stepId);
-            } catch (error) {
-              state.errors.push({ step: step.stepId, error });
-
-              if (!options.continueOnError) {
-                state.status = 'failed';
-                break;
-              }
-            }
-          }
-
-          if (state.status === 'running') {
-            state.status = 'completed';
-          }
-
-          return {
-            success: state.status === 'completed',
-            workflowId,
-            status: state.status,
-            completedSteps: state.completedSteps.length,
-            totalSteps: steps.length,
-            duration: Date.now() - state.startedAt.getTime(),
-            errors: state.errors,
-            message: \`Workflow \${state.status}: \${state.completedSteps.length}/\${steps.length} steps completed\`,
-          };
-        } catch (error) {
-          return {
-            success: false,
-            workflowId,
-            error: error instanceof Error ? error.message : 'Workflow execution failed',
-          };
-        }
-      },
-    },
-
-    {
-      name: 'monitor_status',
-      description: 'Monitor task and workflow status',
-      input_schema: z.object({
-        targets: z.array(z.object({
-          type: z.enum(['task', 'workflow', 'scheduled-job']),
-          id: z.string(),
-        })),
-        options: z.object({
-          includeHistory: z.boolean().optional().default(false),
-          includeLogs: z.boolean().optional().default(false),
-          includeMetrics: z.boolean().optional().default(true),
-          timeRange: z.object({
-            start: z.string().optional(),
-            end: z.string().optional(),
-          }).optional(),
-        }).optional(),
-      }),
-      handler: async ({ targets, options = {} }) => {
-        const statuses = targets.map(target => {
-          const status = {
-            type: target.type,
-            id: target.id,
-            status: 'running' as const,
-            lastExecuted: new Date().toISOString(),
-            metrics: options.includeMetrics ? {
-              totalExecutions: 42,
-              successRate: 0.95,
-              avgDuration: 1250,
-              lastDuration: 1100,
-            } : undefined,
-          };
-
-          return status;
-        });
-
-        return {
-          success: true,
-          targets: statuses.length,
-          statuses,
-          message: \`Monitoring \${statuses.length} targets\`,
-        };
-      },
-    },
-
-    {
-      name: 'manage_queue',
-      description: 'Manage task queues',
-      input_schema: z.object({
-        queueName: z.string(),
-        operation: z.enum(['create', 'delete', 'pause', 'resume', 'purge', 'list']),
-        config: z.object({
-          priority: z.number().optional(),
-          concurrency: z.number().optional().default(1),
-          rateLimit: z.object({
-            maxJobs: z.number(),
-            perSeconds: z.number(),
-          }).optional(),
-          retryStrategy: z.object({
-            maxAttempts: z.number().default(3),
-            backoffType: z.enum(['fixed', 'exponential', 'linear']).default('exponential'),
-            initialDelay: z.number().default(1000),
-          }).optional(),
-        }).optional(),
-      }),
-      handler: async ({ queueName, operation, config = {} }) => {
-        console.log(\`Queue operation: \${operation} on \${queueName}\`);
-
-        const operationResults: Record<string, any> = {
-          create: { created: true, queueName, config },
-          delete: { deleted: true, queueName },
-          pause: { paused: true, queueName },
-          resume: { resumed: true, queueName },
-          purge: { purged: true, itemsRemoved: 0 },
-          list: { queues: [{ name: queueName, size: 0, status: 'active' }] },
-        };
-
-        return {
-          success: true,
-          operation,
-          result: operationResults[operation],
-          message: \`Queue operation '\${operation}' completed on \${queueName}\`,
-        };
-      },
-    },
+export const automationAgentDocumentTemplate: DocumentTemplate = createDocumentTemplate({
+  id: 'automation-agent',
+  name: 'Automation Agent',
+  description:
+    'Specializes in task scheduling, workflow orchestration, queue management, and process automation. Ideal for repetitive task automation, workflow optimization, and system integration.',
+  capabilityTags: ['automation', 'scheduling', 'workflow', 'orchestration', 'integration'],
+  idealFor: [
+    'Repetitive task automation and elimination',
+    'Multi-step workflow orchestration',
+    'Task queue management and processing',
+    'System integration and data synchronization',
+    'Scheduled job execution and monitoring',
   ],
+
+  documentSections: {
+    overview: {
+      ...SECTION_TEMPLATES.overview,
+      examples: [
+        'This Automation Agent schedules tasks with cron expressions, orchestrates multi-step workflows with conditional logic, manages task queues with priority handling, and integrates with external systems via webhooks and APIs.',
+        'Key capabilities: Cron-based task scheduling, workflow orchestration with DAG (Directed Acyclic Graph) execution, priority queue management with retry logic, webhook handling and API integrations, event-driven automation triggers',
+        'Ideal for: DevOps engineers automating deployments, data engineers orchestrating ETL pipelines, business analysts automating reporting workflows, system integrators connecting disparate systems',
+        'Prerequisites: Node.js 18+, MiniMax API access, understanding of cron expressions, familiarity with workflow orchestration concepts'
+      ]
+    },
+
+    architecture: {
+      ...SECTION_TEMPLATES.architecture,
+      contentGuidance: [
+        ...SECTION_TEMPLATES.architecture.contentGuidance,
+        'Automation Agent specific: Describe task scheduling engine, workflow execution DAG, queue management strategy, webhook event processing, retry and failure handling'
+      ],
+      examples: [
+        'Components: Scheduler → Workflow Engine → Queue Manager → Integration Hub → Monitor',
+        'Uses cron library (node-cron) for time-based task scheduling',
+        'Workflow engine executes DAG (Directed Acyclic Graph) with conditional branching and parallel execution',
+        'Queue manager built on Bull/BullMQ with Redis backend for distributed task processing',
+        'Integration hub handles webhooks (incoming and outgoing), API calls, and event triggers',
+        'Monitor tracks execution status, logs, and sends notifications on failures'
+      ]
+    },
+
+    implementation: {
+      ...SECTION_TEMPLATES.implementation,
+      subsections: [
+        'Project Structure',
+        'Task Scheduling Tool',
+        'Workflow Orchestration Tool',
+        'Queue Management Tool',
+        'Integration Tool',
+        'Configuration'
+      ],
+      contentGuidance: [
+        'Implement schedule_task tool: accepts cronExpression, taskDefinition (name, parameters), timezone, enabled flag; returns scheduled task ID and next execution time',
+        'Implement execute_workflow tool: accepts workflowDefinition (steps array with dependencies), parameters, options (parallel, timeout); returns workflow execution ID and status',
+        'Implement manage_queue tool: accepts action (add/remove/pause/resume), queueName, task (optional), priority (optional); returns queue status and task count',
+        'Implement integrate_system tool: accepts integrationType (webhook/api/event), configuration (url, method, headers, payload), authConfig; returns integration ID and status',
+        'Use Zod schemas for input validation on all tools',
+        'Implement DAG validation for workflows (detect cycles, validate dependencies)',
+        'Implement retry logic with exponential backoff for failed tasks',
+        'Environment variables: MINIMAX_JWT_TOKEN (required), REDIS_URL (required for queues), LOG_LEVEL (optional, default: info), MAX_RETRIES (optional, default: 3)'
+      ],
+      examples: [
+        'src/tools/schedule-task.ts - Cron-based task scheduler with timezone support',
+        'src/tools/execute-workflow.ts - DAG workflow executor with parallel execution and conditional logic',
+        'src/tools/manage-queue.ts - Queue manager (Bull/BullMQ) with priority and retry handling',
+        'src/tools/integrate-system.ts - Webhook and API integration handler',
+        'src/workflows/ - Workflow definition schemas and validators',
+        'src/queues/ - Queue processors for different task types'
+      ]
+    },
+
+    testing: {
+      ...SECTION_TEMPLATES.testing,
+      contentGuidance: [
+        'Unit tests: Each tool function with various configurations, Zod validation edge cases, cron expression parsing, DAG cycle detection, queue operations',
+        'Integration tests: Complete workflow execution (schedule → execute → queue → integrate), multi-step workflows with dependencies, error recovery and retry logic',
+        'E2E tests: Real scheduled tasks (with accelerated time), actual workflow execution scenarios, queue processing with Redis, webhook integrations (with mock servers)',
+        'Test data: Include sample workflow definitions (simple, complex, parallel, conditional), cron expressions (various patterns), queue scenarios (priority, retry)',
+        'Target 85%+ code coverage on core scheduling, workflow, and queue logic'
+      ],
+      examples: [
+        'tests/unit/tools/schedule-task.test.ts - Test cron parsing, timezone handling, task scheduling',
+        'tests/unit/tools/execute-workflow.test.ts - Verify DAG execution, dependency resolution, parallel execution',
+        'tests/integration/automation-workflow.test.ts - Full pipeline from schedule through integration',
+        'tests/fixtures/workflow-definitions.json - Sample workflows (ETL, deployment, reporting)',
+        'tests/fixtures/cron-expressions.txt - Various cron patterns for validation',
+        'tests/mocks/webhook-server.ts - Mock webhook server for integration testing'
+      ]
+    },
+
+    deployment: {
+      ...SECTION_TEMPLATES.deployment,
+      contentGuidance: [
+        'Prerequisites: Node.js 18+, npm/yarn, MiniMax API JWT token, Redis instance (for queues)',
+        'Build: npm install && npm run build (TypeScript compilation to dist/)',
+        'Environment setup: Copy .env.example to .env, set MINIMAX_JWT_TOKEN and REDIS_URL',
+        'Deployment options: Long-running service (PM2, systemd), containerized deployment (Docker, Kubernetes), serverless with state (AWS Step Functions, Google Cloud Workflows)',
+        'For production: Use Redis cluster for high availability, implement health checks and graceful shutdown',
+        'For Kubernetes: Deploy as StatefulSet with Redis as dependency'
+      ],
+      examples: [
+        'npm install && npm run build',
+        'Set environment: MINIMAX_JWT_TOKEN=your_jwt_token, REDIS_URL=redis://localhost:6379',
+        'Deploy with PM2: pm2 start dist/index.js --name automation-agent',
+        'Deploy to Docker: docker run -e REDIS_URL=redis://redis:6379 automation-agent',
+        'Deploy to Kubernetes: StatefulSet with Redis sidecar, ConfigMap for workflows'
+      ]
+    },
+
+    monitoring: {
+      ...SECTION_TEMPLATES.monitoring,
+      contentGuidance: [
+        'Track: Scheduled task execution count, workflow success/failure rate, queue depth and processing time, integration success rate, retry count',
+        'Log: ERROR for task/workflow failures, WARN for retry attempts, INFO for successful executions, DEBUG for detailed workflow steps and queue operations',
+        'Alert on: workflow failure rate >5%, queue depth >1000 (backlog building), task retry exhausted, integration failure rate >10%, Redis connection loss',
+        'Dashboard: Show scheduled tasks status, workflow execution timeline, queue depth trends, integration health'
+      ],
+      examples: [
+        'Metrics: scheduled_tasks_total, workflow_success_rate, queue_depth, integration_requests_total, retry_count',
+        'Logging: logger.error("Workflow failed", { workflowId, step, error }), logger.warn("Task retry", { taskId, attempt })',
+        'Grafana/Prometheus dashboards: Workflow execution timeline, queue depth over time, task success rate',
+        'Alerts: PagerDuty/Slack on workflow_failure_rate >5%, queue_depth >1000 for 10 minutes, redis_connection_down'
+      ]
+    },
+
+    troubleshooting: {
+      ...SECTION_TEMPLATES.troubleshooting,
+      subsections: [
+        'Scheduling Issues',
+        'Workflow Execution Failures',
+        'Queue Management Problems',
+        'Integration Errors',
+        'Performance Issues'
+      ],
+      contentGuidance: [
+        'Scheduling Issues: Cron expression not triggering, timezone mismatches, task not executing at expected time, schedule conflicts',
+        'Workflow Execution Failures: DAG cycle detected, step timeouts, dependency resolution errors, parallel execution deadlocks',
+        'Queue Management Problems: Tasks stuck in queue, Redis connection issues, queue not processing, priority not respected',
+        'Integration Errors: Webhook delivery failures, API authentication errors, timeout on external systems, payload formatting issues',
+        'Performance Issues: Queue backlog building, workflow execution too slow, Redis memory exhaustion, concurrent execution limits'
+      ],
+      examples: [
+        'Issue: "Cron not triggering" → Verify cron expression syntax (use crontab.guru), check timezone configuration, ensure task enabled flag is true',
+        'Issue: "Workflow DAG cycle detected" → Review workflow definition, check step dependencies for circular references, visualize DAG with graphviz',
+        'Issue: "Queue stuck" → Check Redis connection (PING command), verify queue processor running, check for errors in task processing logic',
+        'Issue: "Webhook delivery failed" → Verify endpoint URL accessible, check authentication headers, validate payload format, review response status codes',
+        'Issue: "Queue backlog building" → Increase worker count, optimize task processing time, add more Redis memory, implement queue priority',
+        'Enable DEBUG logging: LOG_LEVEL=debug for detailed workflow execution steps, queue operations, integration request/response logs'
+      ]
+    },
+
+    maintenance: {
+      ...SECTION_TEMPLATES.maintenance,
+      contentGuidance: [
+        'Daily: Monitor queue depth and clear stuck tasks, review failed workflows and trigger retries',
+        'Weekly: Review scheduled task execution logs, check for missed executions, analyze workflow performance trends',
+        'Monthly: Update dependencies (node-cron, Bull/BullMQ, Redis client), review and optimize slow workflows, clean up old task logs',
+        'Quarterly: Evaluate new workflow patterns and automation opportunities, benchmark queue throughput, review and update retry policies',
+        'Continuous: Monitor Redis memory usage and eviction policy, keep integration endpoints updated, maintain cron expression documentation'
+      ],
+      examples: [
+        'Daily: redis-cli LLEN queue_name → check depth → manual processing if >1000',
+        'Weekly: grep "workflow failed" logs → analyze patterns → adjust retry logic or workflow steps',
+        'Monthly: npm update node-cron bull ioredis, profile slow workflows with --inspect',
+        'Quarterly: Review workflow execution times → identify bottlenecks → optimize or parallelize steps',
+        'Backup: Export scheduled tasks and workflow definitions to S3 daily, retain Redis snapshots for 7 days'
+      ]
+    }
+  },
+
+  planningChecklist: [
+    'Define task scheduling needs (cron expressions, timezones, one-time vs recurring)',
+    'Identify workflow patterns (sequential, parallel, conditional, loops)',
+    'Select queue backend (Redis, RabbitMQ, AWS SQS)',
+    'Determine integration types (webhooks, REST APIs, GraphQL, gRPC)',
+    'Plan retry strategy (max retries, backoff algorithm, failure handling)',
+    'Design workflow definition schema (DAG structure, step types, parameters)',
+    'Choose monitoring and alerting approach (Prometheus, CloudWatch, Datadog)',
+    'Define task priority levels and queue segmentation',
+    'Plan state persistence and recovery mechanisms',
+    'Determine deployment environment (long-running service, Kubernetes, serverless)',
+    'Establish SLA and performance targets (queue latency, workflow completion time)'
+  ],
+
+  architecturePatterns: [
+    'Event-Driven Architecture: React to events (cron triggers, webhooks, queue messages) and execute workflows',
+    'DAG Execution: Represent workflows as Directed Acyclic Graphs for dependency management',
+    'Queue-based Processing: Decouple task submission from execution using priority queues',
+    'Retry with Exponential Backoff: Automatically retry failed tasks with increasing delays',
+    'Circuit Breaker: Prevent cascading failures in integration calls',
+    'Idempotency: Ensure task executions are idempotent to handle retries safely',
+    'Graceful Degradation: Continue processing other tasks when one task/workflow fails'
+  ],
+
+  riskConsiderations: [
+    'State Management: Workflow state must be persisted to handle process restarts',
+    'Retry Storms: Too aggressive retry policies can overwhelm external systems',
+    'Queue Backlog: Slow task processing can lead to unbounded queue growth',
+    'Deadlocks: Complex workflow dependencies may create execution deadlocks',
+    'Data Loss: Redis eviction or crashes can lose queued tasks without persistence',
+    'Integration Fragility: External systems may change APIs or become unavailable',
+    'Resource Exhaustion: Unbounded parallel execution can exhaust system resources'
+  ],
+
+  successCriteria: [
+    'Successfully schedule tasks with various cron expressions and timezones',
+    'Execute workflows with complex dependencies (sequential, parallel, conditional) without deadlocks',
+    'Process queue tasks with <5s latency (P95) under normal load',
+    'Integrate with external systems via webhooks and APIs with >95% success rate',
+    'Automatically retry failed tasks up to configured limit with exponential backoff',
+    'Handle workflow execution of 100 steps in <60s',
+    'Maintain queue depth <100 under normal load, scale to 10,000+ during bursts',
+    '85%+ test coverage on scheduling, workflow, and queue logic',
+    'Clear error messages for configuration issues (e.g., "Invalid cron expression: 0 0 32 * *")',
+    'Documentation includes workflow examples for common automation patterns (ETL, deployment, reporting)'
+  ],
+
+  implementationGuidance: [
+    '1. Start with task scheduling: Use node-cron for cron-based scheduling, implement timezone support with moment-timezone, persist schedule definitions to database',
+    '2. Build workflow engine: Define workflow schema with DAG structure (steps, dependencies, conditions), implement DAG validation (cycle detection), build executor with parallel execution support',
+    '3. Implement queue manager: Use Bull/BullMQ with Redis backend, implement priority queues, add retry logic with exponential backoff, implement job progress tracking',
+    '4. Create integration hub: Build webhook receiver (Express endpoints), implement outgoing webhook sender, add REST API client with authentication, implement event emitters for workflow triggers',
+    '5. Add state persistence: Persist workflow state to database (PostgreSQL, MongoDB), implement checkpoint/resume for long-running workflows, store task execution history',
+    '6. Implement monitoring: Expose Prometheus metrics (task count, workflow duration, queue depth), implement health check endpoints, add logging with correlation IDs',
+    '7. Add validation layers: Zod schemas on all inputs, validate cron expressions (cron-validator), validate workflow DAG structure, validate integration configurations',
+    '8. Write comprehensive tests: Unit test each tool with various configurations, integration test workflows with dependencies, E2E test with real Redis and mock integrations',
+    '9. Optimize for performance: Parallelize workflow steps where possible, batch queue processing, implement connection pooling for Redis and databases, use worker threads for CPU-intensive tasks',
+    '10. Document thoroughly: Include JSDoc on all functions, provide workflow examples (ETL pipeline, deployment workflow, reporting automation), document cron expression patterns and best practices'
+  ]
 });
 
-// Example usage
-async function main() {
-  const query = process.argv[2] || 'Schedule a daily task to backup database at 2am UTC';
-
-  console.log('Automation Agent Query:', query);
-  console.log('---');
-
-  const response = automationAgent.query(query);
-
-  for await (const event of response) {
-    if (event.type === 'text') {
-      process.stdout.write(event.text);
-    } else if (event.type === 'thinking') {
-      console.log('\\n[Thinking]', event.thinking);
-    } else if (event.type === 'tool_use') {
-      console.log('\\n[Tool Use]', event.name);
-    }
-  }
-
-  console.log('\\n---');
-}
-
-main().catch(console.error);
-`;
-
-// Create and export the template
-export const automationAgentTemplate = createTemplate(
-  {
-    id: 'automation-agent',
-    name: 'Automation Agent',
-    description:
-      'Specializes in task orchestration, workflow automation, scheduled execution, and queue management. Ideal for process automation, batch processing, and system integration.',
-    capabilityTags: ['automation', 'orchestration', 'scheduling', 'workflows', 'task-management'],
-    idealFor: [
-      'Scheduled task execution and cron jobs',
-      'Multi-step workflow orchestration',
-      'Batch processing and data pipelines',
-      'System integration and API orchestration',
-      'DevOps automation and CI/CD tasks',
-    ],
-    systemPrompt,
-    requiredDependencies: [
-      '@anthropic-ai/claude-agent-sdk',
-      'zod',
-      'node-cron', // For scheduling
-      'bull', // For queue management (or BullMQ)
-    ],
-    recommendedIntegrations: [
-      'Task queues (Bull, RabbitMQ, Redis)',
-      'Workflow engines (Temporal, Airflow)',
-      'CI/CD platforms (GitHub Actions, Jenkins)',
-      'Monitoring systems (Prometheus, Grafana)',
-    ],
-  },
-  [scheduleTaskTool, executeWorkflowTool, monitorStatusTool, manageQueueTool]
-);
+/**
+ * Legacy AgentTemplate export for backward compatibility
+ * @deprecated Use automationAgentDocumentTemplate instead
+ */
+export const automationAgentTemplate = {
+  id: automationAgentDocumentTemplate.id,
+  name: automationAgentDocumentTemplate.name,
+  description: automationAgentDocumentTemplate.description,
+  capabilityTags: automationAgentDocumentTemplate.capabilityTags,
+  idealFor: automationAgentDocumentTemplate.idealFor,
+  systemPrompt: 'You are an automation agent specializing in task scheduling, workflow orchestration, and queue management.',
+  defaultTools: [],
+  requiredDependencies: ['@anthropic-ai/claude-agent-sdk', 'node-cron', 'bull'],
+  recommendedIntegrations: ['Redis', 'PostgreSQL']
+};

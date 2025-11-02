@@ -361,7 +361,6 @@ export interface TemplateMetadata {
   systemPrompt: string;
   requiredDependencies: string[];
   recommendedIntegrations: string[];
-  starterCode?: string;
 }
 
 /**
@@ -391,5 +390,93 @@ export function createTemplate(
     defaultTools,
     requiredDependencies: metadata.requiredDependencies,
     recommendedIntegrations: metadata.recommendedIntegrations,
+  };
+}
+
+/**
+ * Document section definition for template documentation
+ */
+export interface DocumentSection {
+  title: string;
+  description: string;
+  subsections: string[];
+  contentGuidance: string[];
+  examples?: string[];
+}
+
+/**
+ * Document template for documentation-focused agent guidance
+ */
+export interface DocumentTemplate {
+  id: string;
+  name: string;
+  description: string;
+  capabilityTags: string[];
+  idealFor: string[];
+  documentSections: Record<string, DocumentSection>;
+  planningChecklist: string[];
+  architecturePatterns: string[];
+  riskConsiderations: string[];
+  successCriteria: string[];
+  implementationGuidance: string[];
+}
+
+/**
+ * Metadata for creating a DocumentTemplate
+ */
+export interface DocumentTemplateMetadata {
+  id: string;
+  name: string;
+  description: string;
+  capabilityTags: string[];
+  idealFor: string[];
+  documentSections: Record<string, DocumentSection>;
+  planningChecklist: string[];
+  architecturePatterns: string[];
+  riskConsiderations: string[];
+  successCriteria: string[];
+  implementationGuidance: string[];
+}
+
+/**
+ * Required section keys for all document templates
+ */
+const REQUIRED_SECTIONS = [
+  'overview',
+  'architecture',
+  'implementation',
+  'testing',
+  'deployment',
+  'monitoring',
+  'troubleshooting',
+  'maintenance'
+];
+
+/**
+ * Create a DocumentTemplate from metadata with validation
+ */
+export function createDocumentTemplate(metadata: DocumentTemplateMetadata): DocumentTemplate {
+  // Validate presence of required section keys
+  const providedSections = Object.keys(metadata.documentSections);
+  const missingSections = REQUIRED_SECTIONS.filter(key => !providedSections.includes(key));
+
+  if (missingSections.length > 0) {
+    throw new Error(
+      `Document template "${metadata.id}" is missing required sections: ${missingSections.join(', ')}`
+    );
+  }
+
+  return {
+    id: metadata.id,
+    name: metadata.name,
+    description: metadata.description,
+    capabilityTags: metadata.capabilityTags,
+    idealFor: metadata.idealFor,
+    documentSections: metadata.documentSections,
+    planningChecklist: metadata.planningChecklist,
+    architecturePatterns: metadata.architecturePatterns,
+    riskConsiderations: metadata.riskConsiderations,
+    successCriteria: metadata.successCriteria,
+    implementationGuidance: metadata.implementationGuidance,
   };
 }
