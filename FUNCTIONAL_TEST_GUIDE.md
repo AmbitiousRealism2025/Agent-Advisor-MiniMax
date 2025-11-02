@@ -182,45 +182,95 @@ I want to build an agent that helps researchers find and analyze academic papers
 
 Follow this script to answer the advisor's questions. The advisor should ask ~15 questions across 4 stages.
 
+**IMPORTANT**:
+- Answer ONE question at a time
+- Wait for the advisor to ask the next question before providing the next answer
+- DO NOT paste multi-line answers or table format - readline will treat each line as a separate input
+- Copy/paste the answer text WITHOUT quotes
+
 **Stage 1: Basic Information**
 
-| Question Topic | Your Answer |
-|---------------|-------------|
-| **Agent Name** | "Academic Research Assistant" |
-| **Primary Purpose** | "Help researchers find relevant scientific papers, extract key findings, and generate literature review summaries" |
-| **Target Users** | "Graduate students and academic researchers in STEM fields" |
+**Question 1 - Agent Name**
+```
+Academic Research Assistant
+```
+
+**Question 2 - Primary Purpose**
+```
+Help researchers find relevant scientific papers, extract key findings, and generate literature review summaries
+```
+
+**Question 3 - Target Users**
+```
+Graduate students and academic researchers in STEM fields
+```
 
 ---
 
 **Stage 2: Functional Requirements**
 
-| Question Topic | Your Answer |
-|---------------|-------------|
-| **Key Capabilities** | "Search academic databases like PubMed and arXiv, extract paper metadata (title, authors, abstract, citations), summarize findings, and identify research gaps" |
-| **Input Data** | "Search queries (keywords, topics), paper URLs, DOIs, and research questions" |
-| **Output Format** | "Structured summaries with key findings, citation information, and relevance scores. Export to Markdown or JSON" |
-| **User Interaction** | "Conversational queries like 'Find papers about CRISPR gene editing published after 2020' or 'Summarize the methodology from this paper: [DOI]'" |
+**Question 4 - Key Capabilities**
+```
+Search academic databases like PubMed and arXiv, extract paper metadata (title, authors, abstract, citations), summarize findings, and identify research gaps
+```
+
+**Question 5 - Input Data**
+```
+Search queries (keywords, topics), paper URLs, DOIs, and research questions
+```
+
+**Question 6 - Output Format**
+```
+Structured summaries with key findings, citation information, and relevance scores. Export to Markdown or JSON
+```
+
+**Question 7 - User Interaction**
+```
+Conversational queries like 'Find papers about CRISPR gene editing published after 2020' or 'Summarize the methodology from this paper: [DOI]'
+```
 
 ---
 
 **Stage 3: Technical Requirements**
 
-| Question Topic | Your Answer |
-|---------------|-------------|
-| **External APIs** | "Yes - PubMed API for medical research, arXiv API for physics/CS papers, and Semantic Scholar API for citation data" |
-| **Data Processing** | "Parse XML/JSON from APIs, extract structured metadata, calculate relevance scores, and generate summaries" |
-| **Error Handling** | "Handle API rate limits, invalid DOIs, network timeouts, and papers behind paywalls gracefully" |
-| **Performance** | "Process 10-20 papers per query within 30 seconds. Cache frequently accessed papers" |
+**Question 8 - External APIs**
+```
+Yes - PubMed API for medical research, arXiv API for physics/CS papers, and Semantic Scholar API for citation data
+```
+
+**Question 9 - Data Processing**
+```
+Parse XML/JSON from APIs, extract structured metadata, calculate relevance scores, and generate summaries
+```
+
+**Question 10 - Error Handling**
+```
+Handle API rate limits, invalid DOIs, network timeouts, and papers behind paywalls gracefully
+```
+
+**Question 11 - Performance**
+```
+Process 10-20 papers per query within 30 seconds. Cache frequently accessed papers
+```
 
 ---
 
 **Stage 4: Context & Constraints**
 
-| Question Topic | Your Answer |
-|---------------|-------------|
-| **Deployment** | "Local execution for now, potentially cloud deployment later" |
-| **Timeline** | "MVP in 2 weeks, full feature set in 1 month" |
-| **Additional Context** | "Focus on open-access papers initially. Add support for institutional access later" |
+**Question 12 - Deployment**
+```
+Local execution for now, potentially cloud deployment later
+```
+
+**Question 13 - Timeline**
+```
+MVP in 2 weeks, full feature set in 1 month
+```
+
+**Question 14 - Additional Context**
+```
+Focus on open-access papers initially. Add support for institutional access later
+```
 
 ---
 
