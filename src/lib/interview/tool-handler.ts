@@ -12,7 +12,7 @@ import {
   listSessions,
   deleteSession
 } from './persistence.js';
-import type { Response } from '../../types/interview.js';
+import type { Response, ConversationMetadata } from '../../types/interview.js';
 
 const askInterviewQuestionSchemaShape = {
   action: z.enum(['start', 'answer', 'skip', 'resume', 'status'], {
@@ -42,7 +42,17 @@ class InterviewToolHandler {
     const state = manager.initializeSession();
     this.sessions.set(state.sessionId, manager);
 
-    await saveSession(state);
+    // Initialize conversation metadata
+    const now = new Date();
+    const conversationMetadata: ConversationMetadata = {
+      advisorSessionId: null,
+      messageCount: 0,
+      lastActivity: now,
+      conversationStarted: now
+    };
+    manager.updateConversationMetadata(conversationMetadata);
+
+    await saveSession(manager.getState());
 
     const currentQuestion = manager.getCurrentQuestion();
 
@@ -136,6 +146,15 @@ class InterviewToolHandler {
     }
 
     manager.recordResponse(currentQuestion.id, responseValue);
+
+    // Update conversation metadata timestamp
+    const existingMetadata = manager.getConversationMetadata();
+    if (existingMetadata) {
+      manager.updateConversationMetadata({
+        ...existingMetadata,
+        lastActivity: new Date()
+      });
+    }
 
     const state = manager.getState();
     await saveSession(state);
@@ -279,6 +298,16 @@ class InterviewToolHandler {
 
     manager.loadState(loadedState);
     this.sessions.set(sessionId, manager);
+
+    // Update conversation metadata timestamp
+    const existingMetadata = manager.getConversationMetadata();
+    if (existingMetadata) {
+      manager.updateConversationMetadata({
+        ...existingMetadata,
+        lastActivity: new Date()
+      });
+      await saveSession(manager.getState());
+    }
 
     const currentQuestion = manager.getCurrentQuestion();
 

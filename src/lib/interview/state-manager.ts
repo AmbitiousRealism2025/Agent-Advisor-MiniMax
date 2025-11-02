@@ -2,7 +2,8 @@ import type {
   InterviewState,
   InterviewStage,
   InterviewQuestion,
-  Response
+  Response,
+  ConversationMetadata
 } from '../../types/interview.js';
 import type { AgentRequirements, AgentCapabilities } from '../../types/agent.js';
 import { INTERVIEW_QUESTIONS } from './questions.js';
@@ -33,7 +34,8 @@ export class InterviewStateManager {
       responses: [],
       requirements: {},
       recommendations: null,
-      isComplete: false
+      isComplete: false,
+      conversationMetadata: undefined
     };
     return this.state;
   }
@@ -105,16 +107,44 @@ export class InterviewStateManager {
     return { ...this.state.requirements };
   }
 
-  canResume(persistedState: InterviewState): boolean {
-    if (!persistedState.sessionId || persistedState.isComplete) {
+  getRequirements(): Partial<AgentRequirements> {
+    return this.getCollectedRequirements();
+  }
+
+  getProgress(): {
+    currentStage: InterviewStage;
+    currentQuestionIndex: number;
+    answered: number;
+    total: number;
+    percentage: number;
+  } {
+    const total = INTERVIEW_QUESTIONS.length;
+    const answered = this.state.responses.length;
+    const percentage = total > 0
+      ? Math.round((answered / total) * 100)
+      : 0;
+
+    return {
+      currentStage: this.state.currentStage,
+      currentQuestionIndex: this.state.currentQuestionIndex,
+      answered,
+      total,
+      percentage
+    };
+  }
+
+  canResume(persistedState?: InterviewState): boolean {
+    const stateToCheck = persistedState || this.state;
+
+    if (!stateToCheck.sessionId || stateToCheck.isComplete) {
       return false;
     }
 
     const hasValidStage = ['discovery', 'requirements', 'architecture', 'output'].includes(
-      persistedState.currentStage
+      stateToCheck.currentStage
     );
 
-    return hasValidStage && Array.isArray(persistedState.responses);
+    return hasValidStage && Array.isArray(stateToCheck.responses);
   }
 
   loadState(persistedState: InterviewState): void {
@@ -123,8 +153,27 @@ export class InterviewStateManager {
       responses: persistedState.responses.map(r => ({
         ...r,
         timestamp: r.timestamp instanceof Date ? r.timestamp : new Date(r.timestamp)
-      }))
+      })),
+      conversationMetadata: persistedState.conversationMetadata
+        ? {
+            ...persistedState.conversationMetadata,
+            lastActivity: persistedState.conversationMetadata.lastActivity instanceof Date
+              ? persistedState.conversationMetadata.lastActivity
+              : new Date(persistedState.conversationMetadata.lastActivity),
+            conversationStarted: persistedState.conversationMetadata.conversationStarted instanceof Date
+              ? persistedState.conversationMetadata.conversationStarted
+              : new Date(persistedState.conversationMetadata.conversationStarted)
+          }
+        : undefined
     };
+  }
+
+  updateConversationMetadata(metadata: ConversationMetadata): void {
+    this.state.conversationMetadata = metadata;
+  }
+
+  getConversationMetadata(): ConversationMetadata | null {
+    return this.state.conversationMetadata || null;
   }
 
   private getQuestionsForStage(stage: InterviewStage): InterviewQuestion[] {

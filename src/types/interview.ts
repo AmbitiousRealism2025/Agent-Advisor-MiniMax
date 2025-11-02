@@ -26,6 +26,13 @@ export interface InterviewQuestion {
   followUp?: string;
 }
 
+export interface ConversationMetadata {
+  advisorSessionId: string | null;
+  messageCount: number;
+  lastActivity: Date;
+  conversationStarted: Date;
+}
+
 export interface InterviewState {
   sessionId: string;
   currentStage: InterviewStage;
@@ -34,6 +41,9 @@ export interface InterviewState {
   requirements: Partial<AgentRequirements>;
   recommendations: AgentRecommendations | null;
   isComplete: boolean;
+  startedAt?: Date;
+  lastUpdatedAt?: Date;
+  conversationMetadata?: ConversationMetadata;
 }
 
 export interface PersistedState {
@@ -41,4 +51,5 @@ export interface PersistedState {
   timestamp: Date;
   interviewState: InterviewState;
   partialRequirements: Partial<AgentRequirements>;
+  conversationMetadata?: ConversationMetadata;
 }
