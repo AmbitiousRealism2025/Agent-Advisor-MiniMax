@@ -292,6 +292,19 @@ Multiple temp directories not cleaning up properly between tests.
    - Adjust thresholds or improve capability matching
 ```
 
+### Experimental Testing Branch
+
+**Branch**: `jules-test`
+**Purpose**: Experimental branch for testing Jules' agent performance on fixing test failures
+**Status**: Available for remote testing
+
+This branch is a copy of `dev` at commit 412bffb and will be used to:
+- Test Jules' agent's ability to diagnose and fix the 38 test failures
+- Compare approaches between different AI agents
+- Evaluate remote agent capabilities with complex debugging tasks
+
+**Note**: All production fixes will be done on `dev` branch by the primary development agent. The `jules-test` branch is for comparative analysis only.
+
 ### Test Files Status
 
 ✅ **Passing (74 tests)**:
