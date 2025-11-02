@@ -15,17 +15,8 @@ stateDiagram-v2
     ScoringTemplates --> SelectingTemplate: Choose best match
     SelectingTemplate --> GeneratingRecommendations: Build recommendations
 
-    GeneratingRecommendations --> Generating: Generation phase
-    Generating --> CodeGeneration: generate_agent_code
-    Generating --> PromptGeneration: generate_system_prompt
-    Generating --> ConfigGeneration: generate_config_files
-
-    CodeGeneration --> Markdown
-    PromptGeneration --> Markdown
-    ConfigGeneration --> Markdown
-
-    Markdown --> Exporting: generate_implementation_guide
-    Exporting --> OutputReady: Markdown complete
+    GeneratingRecommendations --> Documenting: generate_planning_document
+    Documenting --> OutputReady: Planning document complete
 
     OutputReady --> Saving: /save command
     Saving --> Ready: File saved
@@ -46,8 +37,8 @@ stateDiagram-v2
         - Requirements: 15pts
     end note
 
-    note right of Markdown
-        All outputs are
-        Markdown-formatted
-        (NOT file operations)
+    note right of Documenting
+        Single planning document
+        output (Markdown-only)
+        Use /save for persistence
     end note

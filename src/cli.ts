@@ -294,9 +294,9 @@ export class AdvisorCLI {
 
         if (this.lastOutput.includes('```')) {
           console.log('\n' + '─'.repeat(60));
-          console.log('💡 Tip: Code blocks detected in the output above!');
-          console.log('   • Copy the code from each code fence');
-          console.log('   • Use /save to save this output to a Markdown file');
+          console.log('💡 Tip: Markdown block detected in the output above!');
+          console.log('   • Copy the planning document content from the Markdown fence');
+          console.log('   • Use /save to save this planning document to a Markdown file');
           console.log('─'.repeat(60) + '\n');
         }
       } catch (error) {
@@ -422,14 +422,14 @@ CLI OPTIONS:
 
 OUTPUT CAPTURE:
   The CLI automatically captures all advisor responses. When the advisor
-  generates code or configuration files, you'll see a tip message with
+  generates a planning document (Markdown), you'll see a tip message with
   instructions to save the output.
 
   Example workflow:
     1. Ask: "I want to build a data analysis agent"
-    2. Advisor generates code with Markdown formatting
+    2. Advisor generates a planning document (Markdown)
     3. Use: /save (interactive directory and filename selection)
-    4. Copy code blocks from the saved file
+    4. Copy planning document content from the saved file
 
 ENVIRONMENT VARIABLES:
   MAX_MESSAGE_LENGTH  Thinking block truncation length (default: 300, range: 50-1000)
@@ -449,9 +449,9 @@ USAGE:
 WORKFLOW:
   1. Interview - Answer questions about your requirements
   2. Classification - Get template recommendations
-  3. Generation - Receive generated code and configuration (as Markdown)
+  3. Documentation - Receive a planning document (Markdown)
   4. Save Output - Use /save to write Markdown to disk
-  5. Implementation - Copy code from Markdown and follow guide
+  5. Implementation - Follow the planning document to implement offline
 
 For more information, visit: https://github.com/anthropics/agent-advisor
 `);

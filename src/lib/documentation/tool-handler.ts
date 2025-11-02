@@ -24,7 +24,7 @@ const recommendationsSchema = z.object({
   agentType: z.string(),
   requiredDependencies: z.array(z.string()),
   mcpServers: z.array(mcpServerSchema),
-  systemPrompt: z.string(),
+  systemPrompt: z.string().optional(),
   toolConfigurations: z.array(toolConfigurationSchema),
   estimatedComplexity: z.enum(['low', 'medium', 'high']),
   implementationSteps: z.array(z.string()),
