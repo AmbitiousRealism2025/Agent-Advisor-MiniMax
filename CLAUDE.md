@@ -6,6 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Build an advisor agent that interviews developers, classifies needs, and generates comprehensive planning documents for Claude Agent SDK implementation targeting the MiniMax API. The output is a single Markdown planning document with 8 sections providing actionable implementation guidance.
 
+### GUI-fork Branch: Next Stage
+
+**IMPORTANT**: This branch (GUI-fork) is dedicated to planning and implementing a web-based graphical user interface for the advisor agent. The GUI will follow the **Kandoo Codex Design Language** (see `KANDOO-CODEX-DESIGN-LANGUAGE.md`) featuring:
+
+- **Cyberpunk glass-morphic aesthetic** with liquid glass UI and neon accents
+- **Animated code rain background** with syntax-highlighted falling code
+- **Typewriter text animation** for real-time response display
+- **Spring physics interactions** using Framer Motion
+- **Dark-first design** optimized for developer workflows
+
+The next phase involves architectural planning for the GUI implementation, maintaining the existing CLI functionality while adding a browser-based interface.
+
 ## Essential Commands
 
 ### Development Workflow

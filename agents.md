@@ -7,6 +7,24 @@ Welcome to the Agent Advisor MiniMax MVP. This document gives future coding agen
 - Maintain strict adherence to the five core templates defined in the Phase 1 plan until the roadmap specifies otherwise.
 - Output is a single Markdown planning document with 8 standardized sections providing actionable implementation guidance.
 
+### GUI-fork Branch: Next Development Stage
+
+**Branch Purpose**: This branch is a fork from the main advisor agent to develop a web-based graphical user interface (GUI) while maintaining the existing CLI functionality.
+
+**Design Language**: The GUI will implement the **Kandoo Codex Design Language** (documented in `KANDOO-CODEX-DESIGN-LANGUAGE.md`), featuring:
+- Cyberpunk glass-morphic aesthetic with multi-layered transparency
+- Animated code rain background (falling syntax-highlighted code)
+- Typewriter text animation for streaming advisor responses
+- Spring-based physics for tactile interactions
+- Dark-first design optimized for low-light development environments
+
+**Next Steps**:
+1. Plan GUI architecture that preserves existing advisor agent functionality
+2. Design component structure following glass-morphic design patterns
+3. Implement streaming response visualization with typewriter effect
+4. Integrate animated code rain and interactive elements
+5. Maintain backward compatibility with CLI interface
+
 ## Setup Checklist
 1. Review `agent_advisor_mvp-plan.md` for architectural details, timelines, and template specifications.
 2. Read the SDK primers in `Agent SDK Primers/` to align with approved integration patterns.
