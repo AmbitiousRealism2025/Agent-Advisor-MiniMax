@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Build an advisor agent that interviews developers, classifies needs, and generates comprehensive planning documents for Claude Agent SDK implementation targeting the MiniMax API. The output is a single Markdown planning document with 8 sections providing actionable implementation guidance.
 
+### TUI-MVP Branch: Terminal UI Enhancement
+
+**IMPORTANT**: This branch (TUI-MVP) is dedicated to enhancing the terminal user interface with improved visual design and user experience. The focus is on refining the look and feel of the existing CLI while maintaining all core functionality.
+
+**Next Phase**: Develop a modern Terminal User Interface (TUI) that improves the visual presentation and interaction patterns of the current CLI, making the advisor agent more intuitive and visually appealing in terminal environments.
+
 ## Essential Commands
 
 ### Development Workflow

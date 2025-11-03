@@ -7,6 +7,23 @@ Welcome to the Agent Advisor MiniMax MVP. This document gives future coding agen
 - Maintain strict adherence to the five core templates defined in the Phase 1 plan until the roadmap specifies otherwise.
 - Output is a single Markdown planning document with 8 standardized sections providing actionable implementation guidance.
 
+### TUI-MVP Branch: Terminal UI Enhancement
+
+**Branch Purpose**: This branch focuses on enhancing the terminal user interface (TUI) of the existing CLI with improved visual design and user experience.
+
+**Objectives**:
+- Refine the look and feel of the current terminal interface
+- Improve visual presentation and interaction patterns
+- Maintain all existing CLI functionality while enhancing aesthetics
+- Create a more intuitive and visually appealing terminal experience
+
+**Next Steps**:
+1. Evaluate current CLI visual design and identify improvement areas
+2. Research modern TUI libraries and design patterns
+3. Design enhanced terminal layouts and visual elements
+4. Implement TUI improvements while preserving core functionality
+5. Ensure backward compatibility with existing CLI commands
+
 ## Setup Checklist
 1. Review `agent_advisor_mvp-plan.md` for architectural details, timelines, and template specifications.
 2. Read the SDK primers in `Agent SDK Primers/` to align with approved integration patterns.
